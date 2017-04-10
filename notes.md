@@ -8,11 +8,18 @@
 * Each message/reply in the conversation is a file named "msg1.txt",
   "msg2.txt", and so on.
 
+* the message files contain the author and timestamp of the message.
+
 * Edits/modifications to a message are "msg1.1.txt" for the 1st modified
   revision version of message 1, "msg1.2.txt" for the 2nd modified revision
   and so on.
 
+* How do we ensure the sequence of message file names doesn't have collisions between multiple
+  conversers?
+
 * Participants in a conversation are controlled by the upspin Access
   file.  
 
-* 
+* File contents must be cryptographically signed by the sender (and verified by the receiver).
+  Where should the signature live?
+
