@@ -90,16 +90,18 @@ func sortMsgs(names []string) {
 	})
 }
 
-func printUsage(cmd, usage string) func() {
+func printUsage(fs *flag.FlagSet, cmd, usage string) func() {
 	return func() {
-		log.Fatalf("Usage:\n    %v %v\n", cmd, usage)
+		log.Printf("Usage:\n    %v %v\nOptions:\n", cmd, usage)
+		fs.PrintDefaults()
 	}
 }
 
 func create(cmd string, args []string) {
 	const usage = `<message-text>...`
 	fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
-	fs.Usage = printUsage(cmd, usage)
+	var convName = fs.String("title", "", "conversation name/title for this message")
+	fs.Usage = printUsage(fs, cmd, usage)
 	err := fs.Parse(args)
 	check(err)
 
@@ -112,6 +114,15 @@ func create(cmd string, args []string) {
 
 	// TODO: set parent based on any pre-existing messages in the conversation (if any)
 	var parent MsgName
+	if *convName != "" {
+		conv, err := readConversation(*convName)
+		if err != nil || len(conv.Messages) == 0 {
+			log.Printf("no existing conversation named '%v' found", *convName)
+		} else {
+			parent = conv.Messages[len(conv.Messages)-1].Name()
+		}
+	}
+
 	m := NewMessage(cfg.UserName(), parent, bytes.NewBufferString(msg))
 	payload, err := m.Sign(cfg)
 	if err != nil {
@@ -120,10 +131,15 @@ func create(cmd string, args []string) {
 	fmt.Println(payload)
 }
 
+func readConversation(convName string) (*Conversation, error) {
+	name := path.Join(string(cfg.UserName()), ConverseDir, convName)
+	return ReadConversation(cfg, upspin.PathName(name))
+}
+
 func show(cmd string, args []string) {
 	const usage = `<conversation-name>`
 	fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
-	fs.Usage = printUsage(cmd, usage)
+	fs.Usage = printUsage(fs, cmd, usage)
 	err := fs.Parse(args)
 	check(err)
 
@@ -132,8 +148,7 @@ func show(cmd string, args []string) {
 		fs.Usage()
 	}
 
-	convName := path.Join(string(cfg.UserName()), ConverseDir, fs.Arg(0))
-	conv, err := ReadConversation(cfg, upspin.PathName(convName))
+	conv, err := readConversation(flag.Arg(0))
 	if err != nil {
 		log.Fatal(err)
 	}

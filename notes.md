@@ -24,7 +24,8 @@ Data layout:
   resolve the order by the various user interfaces.
 
 * File contents must be cryptographically signed by the sender (and verified
-  by the receiver).  Where should the signature live?
+  by the receiver).  Signature is appended to the end of each message's file
+  contents.
 
 Inviting People to a conversation:
 
@@ -39,4 +40,7 @@ Inviting People to a conversation:
 * Participants in a conversation are controlled by the upspin Access
   file.  Access can be controlled, revoked, etc. at any time by just the
   normal upspin Access control methods.
+
+* The conversations directory must provide create access to all people who you
+  want to be able to start conversations with you from their end.
 
