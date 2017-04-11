@@ -15,17 +15,24 @@ import (
 
 	"upspin.io/bind"
 	"upspin.io/factotum"
+	_ "upspin.io/key/remote"
 	"upspin.io/upspin"
 )
 
-const msgPrefix = "msg"
-const msgSigHeader = "\n\n-------------------------- SIGNATURE ---------------------------"
-const msgHeaderMarker = "-------------------------- END HEADER --------------------------\n\n"
-const sigBase = 16
+const (
+	msgPrefix    = "msg"
+	msgExtension = "txt"
+)
 
-// Lookup returns the public key for a given upspin user using the key server
+const (
+	msgSigHeader    = "\n\n-------------------------- SIGNATURE ---------------------------"
+	msgHeaderMarker = "-------------------------- END HEADER --------------------------\n\n"
+	sigBase         = 16
+)
+
+// lookup returns the public key for a given upspin user using the key server
 // endpoint contained in the given upspin config.
-func Lookup(config upspin.Config, name upspin.UserName) (key upspin.PublicKey, err error) {
+func lookup(config upspin.Config, name upspin.UserName) (key upspin.PublicKey, err error) {
 	keyserv, err := bind.KeyServer(config, config.KeyEndpoint())
 	if err != nil {
 		return key, err
@@ -40,7 +47,7 @@ func Lookup(config upspin.Config, name upspin.UserName) (key upspin.PublicKey, e
 type MsgName string
 
 func NewMsgName(user upspin.UserName, num int) MsgName {
-	return MsgName(fmt.Sprintf("%v%v-%v.md", msgPrefix, num, user))
+	return MsgName(fmt.Sprintf("%v%v-%v.%v", msgPrefix, num, user, msgExtension))
 }
 
 func ParseMsgName(name string) MsgName {
@@ -62,7 +69,15 @@ func (n MsgName) User() upspin.UserName {
 }
 
 func (n MsgName) Number() int {
-	numStr := n[len(msgPrefix):strings.Index(string(n), ".")]
+	i := strings.Index(string(n), ".")
+	i2 := strings.Index(string(n), "-")
+	if i2 < i {
+		i = i2
+	}
+	if i < 0 {
+		panic("invalid message name '" + n + "'")
+	}
+	numStr := n[len(msgPrefix):i]
 	num, err := strconv.Atoi(string(numStr))
 	if err != nil {
 		panic("invalid message name '" + n + "'")
@@ -132,7 +147,7 @@ func ParseMessage(r io.Reader) (*Message, error) {
 }
 
 func (m *Message) Verify(c upspin.Config) error {
-	key, err := Lookup(c, m.Author)
+	key, err := lookup(c, m.Author)
 	if err != nil {
 		return fmt.Errorf("failed to discover message author's public key: %v", err)
 	}
@@ -144,6 +159,12 @@ func NewMessage(author upspin.UserName, parent MsgName, body io.Reader) *Message
 }
 
 func (m *Message) Name() MsgName { return m.Parent.NextName(m.Author) }
+
+func (m *Message) String() string {
+	content := strings.Replace(m.content, "\n", "\n    ", -1)
+	return fmt.Sprintf("%v on %v\n    %v\n",
+		m.Author, m.Time.Format(time.UnixDate), content)
+}
 
 func (m *Message) contentHash() []byte {
 	h := sha256.Sum256([]byte(m.payloadNoSig()))
