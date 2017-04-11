@@ -1,8 +1,12 @@
 package main
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -10,7 +14,89 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
+
+	"upspin.io/upspin"
 )
+
+type MsgName string
+
+const msgPrefix = "msg"
+
+func NewMsgName(user upspin.UserName, num int) MsgName {
+	return MsgName(fmt.Sprintf("%v%v-%v.md", msgPrefix, num, user))
+}
+
+func ParseMsgName(name string) MsgName {
+	mn := MsgName(name)
+	mn.Number()
+	return mn
+}
+
+func (n MsgName) NextName(user upspin.UserName) MsgName {
+	if n == "" {
+		return NewMsgName(user, 1)
+	}
+	return NewMsgName(user, n.Number()+1)
+}
+
+func (n MsgName) User() upspin.UserName {
+	user := n[strings.Index(string(n), "-")+1 : strings.LastIndex(string(n), ".")]
+	return upspin.UserName(user)
+}
+
+func (n MsgName) Number() int {
+	numStr := n[len(msgPrefix):strings.Index(string(n), ".")]
+	num, err := strconv.Atoi(string(numStr))
+	if err != nil {
+		panic("invalid message name '" + n + "'")
+	}
+	return num
+}
+
+type Message struct {
+	Author upspin.UserName
+	Time   time.Time
+	Parent MsgName
+	body   io.Reader
+	buf    bytes.Buffer
+	sig    upspin.Signature
+}
+
+func NewMessage(author upspin.UserName, parent MsgName, body io.Reader) *Message {
+	return &Message{Author: author, Parent: parent, body: body, Time: time.Now()}
+}
+
+func (m *Message) Payload() bytes.Buffer {
+	return m.buf
+}
+
+func (m *Message) Name() MsgName { return m.Parent.NextName(m.Author) }
+
+func (m *Message) Sign(c upspin.Config) (payload *bytes.Buffer, err error) {
+	if m.sig.R != nil {
+		return nil, errors.New("message has already been signed")
+	}
+
+	fmt.Fprintf(&m.buf, "Author: %v\nTime: %v\nParentMessage: %v\n\n", m.Author, m.Time.Format(time.RFC822Z), m.Parent)
+
+	_, err = io.Copy(&m.buf, m.body)
+	if err != nil {
+		return nil, err
+	}
+
+	f := c.Factotum()
+	h := sha256.Sum256(m.buf.Bytes())
+
+	m.sig, err = f.Sign(h[:])
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Fprintf(&m.buf, "\n\n------------- SIGNATURE ---------------\n%v-%v\n", m.sig.R, m.sig.S)
+
+	return &m.buf, nil
+}
 
 func check(err error) {
 	if err != nil {
