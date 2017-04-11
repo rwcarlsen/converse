@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -23,8 +24,6 @@ import (
 	"upspin.io/upspin"
 )
 
-type MsgName string
-
 const msgPrefix = "msg"
 const msgSigHeader = "\n\n------------- SIGNATURE ---------------"
 const msgHeaderMarker = "------------- END HEADER --------------\n\n"
@@ -43,6 +42,8 @@ func Lookup(config upspin.Config, name upspin.UserName) (key upspin.PublicKey, e
 	}
 	return user.PublicKey, nil
 }
+
+type MsgName string
 
 func NewMsgName(user upspin.UserName, num int) MsgName {
 	return MsgName(fmt.Sprintf("%v%v-%v.md", msgPrefix, num, user))
@@ -78,9 +79,8 @@ func (n MsgName) Number() int {
 type Message struct {
 	Author  upspin.UserName
 	Time    time.Time
-	Parent  MsgName
+	Parent  MsgName `json:"ParentMessage"`
 	body    io.Reader
-	buf     bytes.Buffer
 	content string
 	sig     upspin.Signature
 }
@@ -92,6 +92,7 @@ func ParseMessage(r io.Reader) (*Message, error) {
 	}
 	s := string(data)
 
+	// parse/separate header, body, footer
 	i := strings.Index(s, msgHeaderMarker)
 	if i < 0 {
 		return nil, errors.New("failed to find header while parsing message")
@@ -102,7 +103,20 @@ func ParseMessage(r io.Reader) (*Message, error) {
 		return nil, errors.New("failed to find signature while parsing message")
 	}
 
-	sigText := strings.TrimSpace(s[j+len(msgSigHeader):])
+	header := s[:i]
+	footer := s[j+len(msgSigHeader):]
+	content := s[i+len(msgHeaderMarker) : j]
+
+	m := &Message{content: content}
+
+	// parse header
+	err = json.Unmarshal([]byte(header), &m)
+	if err != nil {
+		return nil, errors.New("malformed message header: " + err.Error())
+	}
+
+	// parse crypto signature
+	sigText := strings.TrimSpace(footer)
 	parts := strings.Split(sigText, "-")
 	if len(parts) != 2 {
 		return nil, errors.New("found malformed signature while parsing message")
@@ -119,7 +133,8 @@ func ParseMessage(r io.Reader) (*Message, error) {
 		return nil, errors.New("invalid signature format found while parsing message")
 	}
 
-	return &Message{content: s[i+len(msgHeaderMarker) : j], sig: upspin.Signature{R: rint, S: sint}}, nil
+	m.sig = upspin.Signature{R: rint, S: sint}
+	return m, nil
 }
 
 func (m *Message) Verify(key upspin.PublicKey) error {
@@ -133,35 +148,54 @@ func NewMessage(author upspin.UserName, parent MsgName, body io.Reader) *Message
 func (m *Message) Name() MsgName { return m.Parent.NextName(m.Author) }
 
 func (m *Message) contentHash() []byte {
-	h := sha256.Sum256([]byte(m.content))
+	h := sha256.Sum256([]byte(m.payloadNoSig()))
 	return h[:]
 }
 
-func (m *Message) Sign(c upspin.Config) (payload *bytes.Buffer, err error) {
-	if m.sig.R != nil {
-		return nil, errors.New("message has already been signed")
+func (m *Message) payloadNoSig() string {
+	var header = struct {
+		Author        string
+		Time          time.Time
+		ParentMessage string
+	}{string(m.Author), m.Time, string(m.Parent)}
+	data, err := json.MarshalIndent(header, "", "    ")
+	if err != nil {
+		panic(err)
 	}
 
-	fmt.Fprintf(&m.buf, "Author: %v\nTime: %v\nParentMessage: %v\n%v", m.Author, m.Time.Format(time.RFC822Z), m.Parent, msgHeaderMarker)
+	var buf bytes.Buffer
+	fmt.Fprintf(&buf, "%s\n%v", data, msgHeaderMarker)
+	buf.WriteString(m.content)
+	return buf.String()
+}
+func (m *Message) payloadSigOnly() string {
+	return fmt.Sprintf("%v\n%v-%v\n", msgSigHeader, m.sig.R, m.sig.S)
+}
+
+func (m *Message) Payload() (string, error) {
+	if m.sig.R == nil {
+		return "", errors.New("cannog provide payload of an unsigned message")
+	}
+	return m.payloadNoSig() + m.payloadSigOnly(), nil
+}
+
+func (m *Message) Sign(c upspin.Config) (payload string, err error) {
+	if m.sig.R != nil {
+		return "", errors.New("message has already been signed")
+	}
 
 	data, err := ioutil.ReadAll(m.body)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	m.content = string(data)
 
-	m.buf.WriteString(m.content)
-
-	f := c.Factotum()
-
-	m.sig, err = f.Sign(m.contentHash())
+	m.sig, err = c.Factotum().Sign(m.contentHash())
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
-	fmt.Fprintf(&m.buf, "%v\n%v-%v\n", msgSigHeader, m.sig.R, m.sig.S)
-
-	return &m.buf, nil
+	return m.payloadNoSig() + m.payloadSigOnly(), nil
 }
 
 func check(err error) {

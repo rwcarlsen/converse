@@ -25,7 +25,7 @@ func TestMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fmt.Printf("%s", payload)
+	fmt.Printf("payload='%s'", payload)
 
 	pubkey, err := Lookup(config, user)
 	if err != nil {
@@ -39,7 +39,7 @@ func TestMessage(t *testing.T) {
 	}
 
 	// reparse message from payload and verify integrity
-	mparsed, err := ParseMessage(payload)
+	mparsed, err := ParseMessage(bytes.NewBufferString(payload))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,4 +47,9 @@ func TestMessage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	payload, err = mparsed.Payload()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Printf("reparsed payload='%s'", payload)
 }
