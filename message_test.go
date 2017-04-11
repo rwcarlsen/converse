@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	"testing"
 
 	"upspin.io/config"
@@ -25,15 +24,8 @@ func TestMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fmt.Printf("payload='%s'", payload)
-
-	pubkey, err := Lookup(config, user)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	// verify message integrity
-	err = m.Verify(pubkey)
+	err = m.Verify(config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,13 +35,18 @@ func TestMessage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = mparsed.Verify(pubkey)
+	err = mparsed.Verify(config)
 	if err != nil {
 		t.Fatal(err)
 	}
-	payload, err = mparsed.Payload()
+	payload2, err := mparsed.Payload()
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Printf("reparsed payload='%s'", payload)
+
+	if payload != payload2 {
+		t.Errorf("payloads not equal:\n\npayload1:\n%v\n\npayload2:\n%v\n", payload, payload2)
+	} else {
+		t.Logf("payload:\n%v\n", payload)
+	}
 }

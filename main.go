@@ -25,9 +25,9 @@ import (
 )
 
 const msgPrefix = "msg"
-const msgSigHeader = "\n\n------------- SIGNATURE ---------------"
-const msgHeaderMarker = "------------- END HEADER --------------\n\n"
-const sigBase = 10
+const msgSigHeader = "\n\n-------------------------- SIGNATURE ---------------------------"
+const msgHeaderMarker = "-------------------------- END HEADER --------------------------\n\n"
+const sigBase = 16
 
 // Lookup returns the public key for a given upspin user using the key server
 // endpoint contained in the given upspin config.
@@ -117,7 +117,7 @@ func ParseMessage(r io.Reader) (*Message, error) {
 
 	// parse crypto signature
 	sigText := strings.TrimSpace(footer)
-	parts := strings.Split(sigText, "-")
+	parts := strings.Split(sigText, "\n")
 	if len(parts) != 2 {
 		return nil, errors.New("found malformed signature while parsing message")
 	}
@@ -137,7 +137,11 @@ func ParseMessage(r io.Reader) (*Message, error) {
 	return m, nil
 }
 
-func (m *Message) Verify(key upspin.PublicKey) error {
+func (m *Message) Verify(c upspin.Config) error {
+	key, err := Lookup(c, m.Author)
+	if err != nil {
+		return fmt.Errorf("failed to discover message author's public key: %v", err)
+	}
 	return factotum.Verify(m.contentHash(), m.sig, key)
 }
 
@@ -169,7 +173,7 @@ func (m *Message) payloadNoSig() string {
 	return buf.String()
 }
 func (m *Message) payloadSigOnly() string {
-	return fmt.Sprintf("%v\n%v-%v\n", msgSigHeader, m.sig.R, m.sig.S)
+	return fmt.Sprintf("%v\n%x\n%x\n", msgSigHeader, m.sig.R, m.sig.S)
 }
 
 func (m *Message) Payload() (string, error) {
