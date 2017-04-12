@@ -39,6 +39,22 @@ func (c *Conversation) String() string {
 	return buf.String()
 }
 
+func ListConversations(c upspin.Config) ([]upspin.PathName, error) {
+	cl := client.New(cfg)
+	pth := path.Join(string(c.UserName()), ConverseDir, "/*")
+
+	ents, err := cl.Glob(pth)
+	if err != nil {
+		return nil, err
+	}
+
+	var convs []upspin.PathName
+	for _, ent := range ents {
+		convs = append(convs, ent.SignedName)
+	}
+	return convs, nil
+}
+
 func ReadConversation(c upspin.Config, name upspin.PathName) (*Conversation, error) {
 	cl := client.New(c)
 	ents, err := cl.Glob(string(name) + "/*")

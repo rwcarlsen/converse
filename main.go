@@ -22,6 +22,7 @@ const usage = `converse [flags...] <subcmd>
 	show     print all messages in a conversation
 	create   create and print signed message 
 	send     send a created message
+	list     list all existing conversations
 	verify   verify integrity of all messages in a conversation
 `
 
@@ -49,6 +50,8 @@ func main() {
 		create(cmd, flag.Args()[1:])
 	case "send":
 		send(cmd, flag.Args()[1:])
+	case "list":
+		list(cmd, flag.Args()[1:])
 	default:
 		log.Fatalf("unrecognized subcommand '%v'", cmd)
 	}
@@ -90,6 +93,26 @@ func send(cmd string, args []string) {
 		if err := m.Send(cfg, upspin.UserName(user)); err != nil {
 			log.Printf("send to %v failed", user)
 		}
+	}
+}
+
+func list(cmd string, args []string) {
+	const usage = ``
+	fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
+	fs.Usage = printUsage(fs, cmd, usage)
+	err := fs.Parse(args)
+	check(err)
+
+	if fs.NArg() != 0 {
+		log.Println("Takes no arguments")
+		fs.Usage()
+	}
+
+	convs, err := ListConversations(cfg)
+	check(err)
+
+	for _, conv := range convs {
+		fmt.Println(conv)
 	}
 }
 
@@ -188,7 +211,7 @@ func loadConfig(path string) {
 
 func printUsage(fs *flag.FlagSet, cmd, usage string) func() {
 	return func() {
-		log.Printf("Usage:\n    %v %v\nOptions:\n", cmd, usage)
+		log.Printf("Usage:\n   converse %v %v\nOptions:\n", cmd, usage)
 		fs.PrintDefaults()
 	}
 }
