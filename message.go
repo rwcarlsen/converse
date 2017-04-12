@@ -15,7 +15,7 @@ import (
 
 	"upspin.io/bind"
 	"upspin.io/factotum"
-	_ "upspin.io/key/remote"
+	_ "upspin.io/transports"
 	"upspin.io/upspin"
 )
 

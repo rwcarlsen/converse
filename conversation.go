@@ -6,8 +6,7 @@ import (
 	"sort"
 
 	"upspin.io/client"
-	_ "upspin.io/dir/remote"
-	_ "upspin.io/store/remote"
+	_ "upspin.io/transports"
 	"upspin.io/upspin"
 )
 

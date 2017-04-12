@@ -13,7 +13,6 @@ import (
 
 	"upspin.io/client"
 	"upspin.io/config"
-	_ "upspin.io/key/remote" // needed for KeyServer operations
 	"upspin.io/upspin"
 )
 
