@@ -55,26 +55,37 @@ func main() {
 }
 
 func send(cmd string, args []string) {
-	const usage = `<user>...`
+	const usage = `[<title> <message>...]`
 	fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
+	var users = fs.String("to", "", "comma-separated recipient(s) of the message")
 	fs.Usage = printUsage(fs, cmd, usage)
 	err := fs.Parse(args)
 	check(err)
 
-	if fs.NArg() < 1 {
-		log.Println("Need at least 1 argument.")
+	if 0 < fs.NArg() && fs.NArg() < 2 {
+		log.Println("Need zero or 2+ arguments")
 		fs.Usage()
 	}
 
-	m, err := ParseMessage(os.Stdin)
-	check(err)
-
-	users := map[string]struct{}{string(cfg.UserName()): struct{}{}}
-	for _, user := range fs.Args() {
-		users[user] = struct{}{}
+	var m *Message
+	if fs.NArg() == 0 {
+		m, err = ParseMessage(os.Stdin)
+		check(err)
+	} else {
+		title := fs.Arg(0)
+		conv, err := ReadConversation(cfg, ConvPath(user, title))
+		check(err)
+		m = conv.Add(user, bytes.NewBufferString(strings.Join(fs.Args()[1:], " ")))
 	}
 
-	for user := range users {
+	um := map[string]struct{}{string(cfg.UserName()): struct{}{}}
+	for _, user := range strings.Split(",", *users) {
+		if user != "" {
+			um[user] = struct{}{}
+		}
+	}
+
+	for user := range um {
 		log.Print("sending to ", user)
 		if err := m.Send(cfg, upspin.UserName(user)); err != nil {
 			log.Printf("send to %v failed", user)
