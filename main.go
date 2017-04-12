@@ -40,30 +40,30 @@ func main() {
 	}
 
 	loadConfig(*configPath)
+	cmd := flag.Arg(0)
+	fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
 
-	switch cmd := flag.Arg(0); cmd {
+	switch cmd {
 	case "show":
-		show(cmd, flag.Args()[1:])
+		show(fs, cmd, flag.Args()[1:])
 	case "verify":
-		verify(cmd, flag.Args()[1:])
+		verify(fs, cmd, flag.Args()[1:])
 	case "create":
-		create(cmd, flag.Args()[1:])
+		create(fs, cmd, flag.Args()[1:])
 	case "send":
-		send(cmd, flag.Args()[1:])
+		send(fs, cmd, flag.Args()[1:])
 	case "list":
-		list(cmd, flag.Args()[1:])
+		list(fs, cmd, flag.Args()[1:])
 	default:
 		log.Fatalf("unrecognized subcommand '%v'", cmd)
 	}
 }
 
-func send(cmd string, args []string) {
+func send(fs *flag.FlagSet, cmd string, args []string) {
 	const usage = `[<title> <message>...]`
-	fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
 	var users = fs.String("to", "", "comma-separated recipient(s) of the message")
-	fs.Usage = printUsage(fs, cmd, usage)
-	err := fs.Parse(args)
-	check(err)
+	fs.Usage = mkUsage(fs, cmd, usage)
+	fs.Parse(args)
 
 	if 0 < fs.NArg() && fs.NArg() < 2 {
 		log.Println("Need zero or 2+ arguments")
@@ -71,6 +71,7 @@ func send(cmd string, args []string) {
 	}
 
 	var m *Message
+	var err error
 	if fs.NArg() == 0 {
 		m, err = ParseMessage(os.Stdin)
 		check(err)
@@ -96,12 +97,10 @@ func send(cmd string, args []string) {
 	}
 }
 
-func list(cmd string, args []string) {
+func list(fs *flag.FlagSet, cmd string, args []string) {
 	const usage = ``
-	fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
-	fs.Usage = printUsage(fs, cmd, usage)
-	err := fs.Parse(args)
-	check(err)
+	fs.Usage = mkUsage(fs, cmd, usage)
+	fs.Parse(args)
 
 	if fs.NArg() != 0 {
 		log.Println("Takes no arguments")
@@ -116,12 +115,10 @@ func list(cmd string, args []string) {
 	}
 }
 
-func create(cmd string, args []string) {
+func create(fs *flag.FlagSet, cmd string, args []string) {
 	const usage = `<title> <message-text>...`
-	fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
-	fs.Usage = printUsage(fs, cmd, usage)
-	err := fs.Parse(args)
-	check(err)
+	fs.Usage = mkUsage(fs, cmd, usage)
+	fs.Parse(args)
 
 	var msg string
 	if fs.NArg() < 1 {
@@ -150,12 +147,10 @@ func create(cmd string, args []string) {
 	fmt.Println(payload)
 }
 
-func show(cmd string, args []string) {
+func show(fs *flag.FlagSet, cmd string, args []string) {
 	const usage = `<conversation-name>`
-	fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
-	fs.Usage = printUsage(fs, cmd, usage)
-	err := fs.Parse(args)
-	check(err)
+	fs.Usage = mkUsage(fs, cmd, usage)
+	fs.Parse(args)
 
 	if fs.NArg() != 1 {
 		log.Println("Wrong number of arguments")
@@ -167,12 +162,10 @@ func show(cmd string, args []string) {
 	fmt.Print(conv)
 }
 
-func verify(cmd string, args []string) {
+func verify(fs *flag.FlagSet, cmd string, args []string) {
 	const usage = `<conversation-name>`
-	fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
-	fs.Usage = printUsage(fs, cmd, usage)
+	fs.Usage = mkUsage(fs, cmd, usage)
 	err := fs.Parse(args)
-	check(err)
 
 	if fs.NArg() != 1 {
 		log.Println("Wrong number of arguments")
@@ -209,7 +202,7 @@ func loadConfig(path string) {
 	user = cfg.UserName()
 }
 
-func printUsage(fs *flag.FlagSet, cmd, usage string) func() {
+func mkUsage(fs *flag.FlagSet, cmd, usage string) func() {
 	return func() {
 		log.Printf("Usage:\n   converse %v %v\nOptions:\n", cmd, usage)
 		fs.PrintDefaults()
