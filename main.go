@@ -26,6 +26,7 @@ const usage = `converse [flags...] <subcmd>
 	show     print all messages in a conversation
 	create   create and print signed message 
 	send     send a created message
+	verify   verify integrity of all messages in a conversation
 `
 
 const defaultConfigPath = "$HOME/upspin/config"
@@ -45,6 +46,8 @@ func main() {
 	switch cmd := flag.Arg(0); cmd {
 	case "show":
 		show(cmd, flag.Args()[1:])
+	case "verify":
+		verify(cmd, flag.Args()[1:])
 	case "create":
 		create(cmd, flag.Args()[1:])
 	case "send":
@@ -142,11 +145,38 @@ func show(cmd string, args []string) {
 		fs.Usage()
 	}
 
-	conv, err := readConversation(flag.Arg(0))
+	conv, err := readConversation(fs.Arg(0))
 	if err != nil {
 		log.Fatal(err)
 	}
 	fmt.Print(conv)
+}
+
+func verify(cmd string, args []string) {
+	const usage = `<conversation-name>`
+	fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
+	fs.Usage = printUsage(fs, cmd, usage)
+	err := fs.Parse(args)
+	check(err)
+
+	if fs.NArg() != 1 {
+		log.Println("Wrong number of arguments")
+		fs.Usage()
+	}
+
+	conv, err := readConversation(fs.Arg(0))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for _, msg := range conv.Messages {
+		err := msg.Verify(cfg)
+		if err != nil {
+			log.Printf("'%v' FAILED verification", msg.Name())
+		} else {
+			fmt.Printf("'%v' verified\n", msg.Name())
+		}
+	}
 }
 
 func loadConfig(path string) {
