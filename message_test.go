@@ -18,7 +18,7 @@ func TestMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	m := NewMessage(user, parent, body)
+	m := NewMessage(user, "mytitle", parent, body)
 	payload, err := m.Sign(config)
 	if err != nil {
 		t.Fatal(err)

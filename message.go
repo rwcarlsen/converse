@@ -86,7 +86,9 @@ func (n MsgName) Number() int {
 }
 
 type Message struct {
-	Author  upspin.UserName
+	Author upspin.UserName
+	// Title represents the name of this message's conversation
+	Title   string
 	Time    time.Time
 	Parent  MsgName `json:"ParentMessage"`
 	body    io.Reader
@@ -154,8 +156,8 @@ func (m *Message) Verify(c upspin.Config) error {
 	return factotum.Verify(m.contentHash(), m.sig, key)
 }
 
-func NewMessage(author upspin.UserName, parent MsgName, body io.Reader) *Message {
-	return &Message{Author: author, Parent: parent, body: body, Time: time.Now()}
+func NewMessage(author upspin.UserName, title string, parent MsgName, body io.Reader) *Message {
+	return &Message{Author: author, Title: title, Parent: parent, body: body, Time: time.Now()}
 }
 
 func (m *Message) Name() MsgName { return m.Parent.NextName(m.Author) }
@@ -176,7 +178,8 @@ func (m *Message) payloadNoSig() string {
 		Author        string
 		Time          time.Time
 		ParentMessage string
-	}{string(m.Author), m.Time, string(m.Parent)}
+		Title         string
+	}{string(m.Author), m.Time, string(m.Parent), m.Title}
 	data, err := json.MarshalIndent(header, "", "    ")
 	if err != nil {
 		panic(err)
