@@ -9,11 +9,13 @@ import (
 	"io"
 	"io/ioutil"
 	"math/big"
+	"path"
 	"strconv"
 	"strings"
 	"time"
 
 	"upspin.io/bind"
+	"upspin.io/client"
 	"upspin.io/factotum"
 	_ "upspin.io/transports"
 	"upspin.io/upspin"
@@ -91,9 +93,18 @@ type Message struct {
 	Title   string
 	Time    time.Time
 	Parent  MsgName `json:"ParentMessage"`
-	body    io.Reader
+	Body    io.Reader
 	content string
 	sig     upspin.Signature
+}
+
+func ReadMessage(cl upspin.Client, path upspin.PathName) (*Message, error) {
+	f, err := cl.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return ParseMessage(f)
 }
 
 func ParseMessage(r io.Reader) (*Message, error) {
@@ -148,6 +159,32 @@ func ParseMessage(r io.Reader) (*Message, error) {
 	return m, nil
 }
 
+func (m *Message) Send(c upspin.Config, recipient upspin.UserName) (err error) {
+	dir := ConvPath(recipient, m.Title)
+	pth := path.Join(string(dir), string(m.Name()))
+
+	cl := client.New(c)
+
+	cl.MakeDirectory(upspin.PathName(dir))
+	if _, err = cl.Lookup(upspin.PathName(dir), false); err != nil {
+		return fmt.Errorf("failed to create conversation directory %v", dir)
+	}
+
+	f, err := cl.Create(upspin.PathName(pth))
+	if err != nil {
+		return err
+	}
+	defer func() { err = f.Close() }()
+
+	payload, err := m.Payload()
+	if err != nil {
+		return err
+	}
+
+	_, err = io.Copy(f, bytes.NewBufferString(payload))
+	return err
+}
+
 func (m *Message) Verify(c upspin.Config) error {
 	key, err := lookup(c, m.Author)
 	if err != nil {
@@ -157,7 +194,7 @@ func (m *Message) Verify(c upspin.Config) error {
 }
 
 func NewMessage(author upspin.UserName, title string, parent MsgName, body io.Reader) *Message {
-	return &Message{Author: author, Title: title, Parent: parent, body: body, Time: time.Now()}
+	return &Message{Author: author, Title: title, Parent: parent, Body: body, Time: time.Now()}
 }
 
 func (m *Message) Name() MsgName { return m.Parent.NextName(m.Author) }
@@ -206,7 +243,7 @@ func (m *Message) Sign(c upspin.Config) (payload string, err error) {
 		return "", errors.New("message has already been signed")
 	}
 
-	data, err := ioutil.ReadAll(m.body)
+	data, err := ioutil.ReadAll(m.Body)
 	if err != nil {
 		return "", err
 	}

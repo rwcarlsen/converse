@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io"
+	"path"
 	"sort"
 
 	"upspin.io/client"
@@ -13,8 +15,19 @@ import (
 const msgSeparator = "---------------------------- msg %v -------------------------------\n"
 const ConverseDir = "conversations"
 
+func ConvPath(user upspin.UserName, title string) upspin.PathName {
+	return upspin.PathName(path.Join(string(user), ConverseDir, title))
+}
+
 type Conversation struct {
 	Messages []*Message
+}
+
+func (c *Conversation) Title() string {
+	if len(c.Messages) > 0 {
+		return c.Messages[0].Title
+	}
+	return ""
 }
 
 func (c *Conversation) String() string {
@@ -35,7 +48,7 @@ func ReadConversation(c upspin.Config, name upspin.PathName) (*Conversation, err
 
 	conv := &Conversation{}
 	for _, ent := range ents {
-		m, err := readMsg(cl, ent.SignedName)
+		m, err := ReadMessage(cl, ent.SignedName)
 		if err != nil {
 			return nil, fmt.Errorf("failed to open message '%v': %v", ent.SignedName, err)
 		}
@@ -47,14 +60,19 @@ func ReadConversation(c upspin.Config, name upspin.PathName) (*Conversation, err
 		ni, nj := mi.Name().Number(), mj.Name().Number()
 		return (ni != nj && ni < nj) || (mi.Time.Unix() < mj.Time.Unix())
 	})
+
 	return conv, nil
 }
 
-func readMsg(cl upspin.Client, path upspin.PathName) (*Message, error) {
-	f, err := cl.Open(path)
-	if err != nil {
-		return nil, err
+func (c *Conversation) Add(user upspin.UserName, body io.Reader) *Message {
+	m := NewMessage(user, c.Title(), c.nextParent(), body)
+	c.Messages = append(c.Messages, m)
+	return m
+}
+
+func (c *Conversation) nextParent() MsgName {
+	if len(c.Messages) == 0 {
+		return MsgName("")
 	}
-	defer f.Close()
-	return ParseMessage(f)
+	return c.Messages[len(c.Messages)-1].Name()
 }

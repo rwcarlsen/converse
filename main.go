@@ -4,14 +4,11 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"os"
-	"path"
 	"strings"
 
-	"upspin.io/client"
 	"upspin.io/config"
 	"upspin.io/upspin"
 )
@@ -33,6 +30,7 @@ const defaultConfigPath = "$HOME/upspin/config"
 var configPath = flag.String("config", defaultConfigPath, "upspin config file")
 
 var cfg upspin.Config
+var user upspin.UserName
 
 func main() {
 	flag.Parse()
@@ -76,24 +74,11 @@ func send(cmd string, args []string) {
 		users[user] = struct{}{}
 	}
 
-	cl := client.New(cfg)
 	for user := range users {
-		dir := path.Join(user, ConverseDir, m.Title)
-		pth := path.Join(dir, string(m.Name()))
-		cl.MakeDirectory(upspin.PathName(dir))
-
-		if _, err := cl.Lookup(upspin.PathName(dir), false); err != nil {
-			log.Fatalf("failed to create conversation directory %v", dir)
-		}
-
-		f, err := cl.Create(upspin.PathName(pth))
-		check(err)
-		payload, err := m.Payload()
-		check(err)
 		log.Print("sending to ", user)
-		_, err = io.Copy(f, bytes.NewBufferString(payload))
-		check(err)
-		check(f.Close())
+		if err := m.Send(cfg, upspin.UserName(user)); err != nil {
+			log.Printf("send to %v failed", user)
+		}
 	}
 }
 
@@ -119,16 +104,15 @@ func create(cmd string, args []string) {
 		msg = strings.Join(fs.Args()[1:], " ")
 	}
 
-	parent, err := nextParent(title)
+	conv, err := ReadConversation(cfg, ConvPath(user, title))
 	if err != nil {
-		log.Print(err)
+		log.Printf("no existing conversation named '%v' found", title)
 	}
 
-	m := NewMessage(cfg.UserName(), title, parent, bytes.NewBufferString(msg))
+	m := conv.Add(user, bytes.NewBufferString(msg))
+	m.Title = title
 	payload, err := m.Sign(cfg)
-	if err != nil {
-		log.Fatal(err)
-	}
+	check(err)
 	fmt.Println(payload)
 }
 
@@ -144,10 +128,8 @@ func show(cmd string, args []string) {
 		fs.Usage()
 	}
 
-	conv, err := readConversation(fs.Arg(0))
-	if err != nil {
-		log.Fatal(err)
-	}
+	conv, err := ReadConversation(cfg, ConvPath(user, fs.Arg(0)))
+	check(err)
 	fmt.Print(conv)
 }
 
@@ -163,10 +145,8 @@ func verify(cmd string, args []string) {
 		fs.Usage()
 	}
 
-	conv, err := readConversation(fs.Arg(0))
-	if err != nil {
-		log.Fatal(err)
-	}
+	conv, err := ReadConversation(cfg, ConvPath(user, fs.Arg(0)))
+	check(err)
 
 	for _, msg := range conv.Messages {
 		err := msg.Verify(cfg)
@@ -182,9 +162,7 @@ func loadConfig(path string) {
 	var err error
 	if path == defaultConfigPath {
 		cfg, err = config.InitConfig(nil)
-		if err != nil {
-			log.Fatal(err)
-		}
+		check(err)
 	} else {
 		f, err := os.Open(path)
 		if err != nil {
@@ -192,29 +170,9 @@ func loadConfig(path string) {
 		}
 		defer f.Close()
 		cfg, err = config.InitConfig(f)
-		if err != nil {
-			log.Fatal(err)
-		}
+		check(err)
 	}
-}
-
-func nextParent(conversationName string) (MsgName, error) {
-	if conversationName == "" {
-		return "", nil
-	}
-
-	conv, err := readConversation(conversationName)
-	if err != nil {
-		return "", fmt.Errorf("no existing conversation named '%v' found", conversationName)
-	} else if len(conv.Messages) == 0 {
-		return "", nil
-	}
-	return conv.Messages[len(conv.Messages)-1].Name(), nil
-}
-
-func readConversation(convName string) (*Conversation, error) {
-	name := path.Join(string(cfg.UserName()), ConverseDir, convName)
-	return ReadConversation(cfg, upspin.PathName(name))
+	user = cfg.UserName()
 }
 
 func printUsage(fs *flag.FlagSet, cmd, usage string) func() {
