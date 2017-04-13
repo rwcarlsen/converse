@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"upspin.io/cmd/cacheserver/cacheutil"
@@ -21,10 +22,11 @@ func init() {
 }
 
 const usage = `converse [flags...] <subcmd>
+	list     list all existing conversations
 	show     print all messages in a conversation
 	create   create and print signed message 
 	send     send a created message
-	list     list all existing conversations
+	addfile  add a file to a conversation
 	verify   verify integrity of all messages in a conversation
 `
 
@@ -46,6 +48,8 @@ func main() {
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
 
 	switch cmd {
+	case "addfile":
+		addfile(fs, cmd, flag.Args()[1:])
 	case "show":
 		show(fs, cmd, flag.Args()[1:])
 	case "verify":
@@ -167,6 +171,28 @@ func show(fs *flag.FlagSet, cmd string, args []string) {
 		fmt.Printf("%s", conv.RenderHtml())
 	} else {
 		fmt.Print(conv)
+	}
+}
+
+func addfile(fs *flag.FlagSet, cmd string, args []string) {
+	const usage = `<conversation-name> <file>...`
+	fs.Usage = mkUsage(fs, cmd, usage)
+	fs.Parse(args)
+
+	if fs.NArg() < 2 {
+		log.Println("Wrong number of arguments")
+		fs.Usage()
+	}
+
+	title := fs.Arg(0)
+	for _, fname := range fs.Args()[1:] {
+		func() {
+			f, err := os.Open(fname)
+			check(err)
+			defer f.Close()
+			err = AddFile(cfg, title, filepath.Base(fname), f)
+			check(err)
+		}()
 	}
 }
 

@@ -17,13 +17,31 @@ import (
 const msgSeparator = "---------------------------- msg %v -------------------------------\n"
 const ConverseDir = "conversations"
 
-func ConvPath(user upspin.UserName, title string) upspin.PathName {
-	return upspin.PathName(path.Join(string(user), ConverseDir, title))
+// ConvPath builds an upspin path for the given user's directory for the named conversation with
+// the passed path elements appended on.
+func ConvPath(u upspin.UserName, title string, paths ...string) upspin.PathName {
+	return upspin.PathName(path.Join(append([]string{string(u), ConverseDir, title}, paths...)...))
+}
+
+func AddFile(c upspin.Config, title, fname string, r io.Reader) (err error) {
+	cl := client.New(c)
+	f, err := cl.Create(ConvPath(c.UserName(), title, fname))
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err2 := f.Close(); err == nil {
+			err = err2
+		}
+	}()
+
+	_, err = io.Copy(f, r)
+	return err
 }
 
 func ListConversations(c upspin.Config) ([]upspin.PathName, error) {
 	cl := client.New(cfg)
-	pth := path.Join(string(c.UserName()), ConverseDir, "/*")
+	pth := string(ConvPath(c.UserName(), "*"))
 
 	ents, err := cl.Glob(pth)
 	if err != nil {

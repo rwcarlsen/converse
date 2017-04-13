@@ -9,7 +9,6 @@ import (
 	"io"
 	"io/ioutil"
 	"math/big"
-	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -175,20 +174,24 @@ func (m *Message) Send(c upspin.Config, recipient upspin.UserName) (err error) {
 	}
 
 	dir := ConvPath(recipient, m.Title)
-	pth := path.Join(string(dir), string(m.Name()))
+	pth := ConvPath(recipient, m.Title, string(m.Name()))
 
 	cl := client.New(c)
 
-	cl.MakeDirectory(upspin.PathName(dir))
-	if _, err = cl.Lookup(upspin.PathName(dir), false); err != nil {
+	cl.MakeDirectory(dir)
+	if _, err = cl.Lookup(dir, false); err != nil {
 		return fmt.Errorf("failed to create conversation directory %v", dir)
 	}
 
-	f, err := cl.Create(upspin.PathName(pth))
+	f, err := cl.Create(pth)
 	if err != nil {
 		return err
 	}
-	defer func() { err = f.Close() }()
+	defer func() {
+		if err2 := f.Close(); err == nil {
+			err = err2
+		}
+	}()
 
 	payload, err := m.Payload()
 	if err != nil {
