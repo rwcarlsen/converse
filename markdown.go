@@ -1,11 +1,5 @@
 package main
 
-import (
-	"fmt"
-
-	"github.com/russross/blackfriday"
-)
-
 const data = `
 hello
 -------
@@ -21,7 +15,3 @@ and here is a list:
 * two
 * three
 `
-
-func renderHtml() {
-	fmt.Printf("%s", blackfriday.MarkdownCommon(input))
-}

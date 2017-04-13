@@ -43,7 +43,7 @@ func main() {
 
 	loadConfig(*configPath)
 	cmd := flag.Arg(0)
-	fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
+	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
 
 	switch cmd {
 	case "show":
@@ -85,7 +85,7 @@ func send(fs *flag.FlagSet, cmd string, args []string) {
 	}
 
 	um := map[string]struct{}{string(cfg.UserName()): struct{}{}}
-	for _, user := range strings.Split(",", *users) {
+	for _, user := range strings.Split(*users, ",") {
 		if user != "" {
 			um[user] = struct{}{}
 		}
@@ -152,6 +152,7 @@ func create(fs *flag.FlagSet, cmd string, args []string) {
 func show(fs *flag.FlagSet, cmd string, args []string) {
 	const usage = `<conversation-name>`
 	fs.Usage = mkUsage(fs, cmd, usage)
+	var dohtml = fs.Bool("html", false, "render conversation messages as html")
 	fs.Parse(args)
 
 	if fs.NArg() != 1 {
@@ -161,7 +162,12 @@ func show(fs *flag.FlagSet, cmd string, args []string) {
 
 	conv, err := ReadConversation(cfg, ConvPath(user, fs.Arg(0)))
 	check(err)
-	fmt.Print(conv)
+
+	if *dohtml {
+		fmt.Printf("%s", conv.RenderHtml())
+	} else {
+		fmt.Print(conv)
+	}
 }
 
 func verify(fs *flag.FlagSet, cmd string, args []string) {

@@ -6,6 +6,9 @@ import (
 	"io"
 	"path"
 	"sort"
+	"time"
+
+	"github.com/russross/blackfriday"
 
 	"upspin.io/client"
 	"upspin.io/upspin"
@@ -16,26 +19,6 @@ const ConverseDir = "conversations"
 
 func ConvPath(user upspin.UserName, title string) upspin.PathName {
 	return upspin.PathName(path.Join(string(user), ConverseDir, title))
-}
-
-type Conversation struct {
-	Messages []*Message
-}
-
-func (c *Conversation) Title() string {
-	if len(c.Messages) > 0 {
-		return c.Messages[0].Title
-	}
-	return ""
-}
-
-func (c *Conversation) String() string {
-	var buf bytes.Buffer
-	for i, msg := range c.Messages {
-		fmt.Fprintf(&buf, msgSeparator, i+1)
-		fmt.Fprint(&buf, msg)
-	}
-	return buf.String()
 }
 
 func ListConversations(c upspin.Config) ([]upspin.PathName, error) {
@@ -52,6 +35,10 @@ func ListConversations(c upspin.Config) ([]upspin.PathName, error) {
 		convs = append(convs, ent.SignedName)
 	}
 	return convs, nil
+}
+
+type Conversation struct {
+	Messages []*Message
 }
 
 func ReadConversation(c upspin.Config, name upspin.PathName) (*Conversation, error) {
@@ -77,6 +64,31 @@ func ReadConversation(c upspin.Config, name upspin.PathName) (*Conversation, err
 	})
 
 	return conv, nil
+}
+
+func (c *Conversation) Title() string {
+	if len(c.Messages) > 0 {
+		return c.Messages[0].Title
+	}
+	return ""
+}
+
+func (c *Conversation) RenderHtml() []byte {
+	var buf bytes.Buffer
+	for i, m := range c.Messages {
+		fmt.Fprintf(&buf, "\n------------- *%v on %v (msg %v)* -------------\n\n%v\n",
+			m.Author, m.Time.Format(time.UnixDate), i+1, m.Content())
+	}
+	return blackfriday.MarkdownCommon(buf.Bytes())
+}
+
+func (c *Conversation) String() string {
+	var buf bytes.Buffer
+	for i, msg := range c.Messages {
+		fmt.Fprintf(&buf, msgSeparator, i+1)
+		fmt.Fprint(&buf, msg)
+	}
+	return buf.String()
 }
 
 func (c *Conversation) Add(user upspin.UserName, body io.Reader) *Message {

@@ -164,7 +164,16 @@ func ParseMessage(r io.Reader) (*Message, error) {
 
 func (m *Message) Content() string { return m.content }
 
+func (m *Message) isSigned() bool { return m.sig.R != nil }
+
 func (m *Message) Send(c upspin.Config, recipient upspin.UserName) (err error) {
+	if !m.isSigned() {
+		_, err := m.Sign(c)
+		if err != nil {
+			return err
+		}
+	}
+
 	dir := ConvPath(recipient, m.Title)
 	pth := path.Join(string(dir), string(m.Name()))
 
@@ -240,8 +249,8 @@ func (m *Message) Payload() (string, error) {
 }
 
 func (m *Message) Sign(c upspin.Config) (payload string, err error) {
-	if m.sig.R != nil {
-		return "", errors.New("message has already been signed")
+	if m.isSigned() {
+		return "", errors.New("cannot re-sign signed message")
 	}
 
 	data, err := ioutil.ReadAll(m.Body)
