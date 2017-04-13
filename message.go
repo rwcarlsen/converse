@@ -17,7 +17,6 @@ import (
 	"upspin.io/bind"
 	"upspin.io/client"
 	"upspin.io/factotum"
-	_ "upspin.io/transports"
 	"upspin.io/upspin"
 )
 

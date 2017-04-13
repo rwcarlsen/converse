@@ -9,7 +9,9 @@ import (
 	"os"
 	"strings"
 
+	"upspin.io/cmd/cacheserver/cacheutil"
 	"upspin.io/config"
+	"upspin.io/transports"
 	"upspin.io/upspin"
 )
 
@@ -200,6 +202,9 @@ func loadConfig(path string) {
 		check(err)
 	}
 	user = cfg.UserName()
+
+	transports.Init(cfg)
+	cacheutil.Start(cfg)
 }
 
 func mkUsage(fs *flag.FlagSet, cmd, usage string) func() {

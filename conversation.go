@@ -8,7 +8,6 @@ import (
 	"sort"
 
 	"upspin.io/client"
-	_ "upspin.io/transports"
 	"upspin.io/upspin"
 )
 
