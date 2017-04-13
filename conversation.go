@@ -73,6 +73,10 @@ func (c *Conversation) Title() string {
 	return ""
 }
 
+// TODO: figure out how to handle relative paths to images.  The images need
+// to either be in the same (relative) directory to the html as they are to
+// the conversation dir message files.  Or we need to figure out some way to
+// rewrite the paths in the rendered html.  Hmmm....
 func (c *Conversation) RenderHtml() []byte {
 	var buf bytes.Buffer
 	for i, m := range c.Messages {
