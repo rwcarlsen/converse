@@ -97,6 +97,10 @@ type Message struct {
 	sig     upspin.Signature
 }
 
+func NewMessage(author upspin.UserName, title string, parent MsgName, body io.Reader) *Message {
+	return &Message{Author: author, Title: title, Parent: parent, Body: body, Time: time.Now()}
+}
+
 func ReadMessage(cl upspin.Client, path upspin.PathName) (*Message, error) {
 	f, err := cl.Open(path)
 	if err != nil {
@@ -158,6 +162,8 @@ func ParseMessage(r io.Reader) (*Message, error) {
 	return m, nil
 }
 
+func (m *Message) Content() string { return m.content }
+
 func (m *Message) Send(c upspin.Config, recipient upspin.UserName) (err error) {
 	dir := ConvPath(recipient, m.Title)
 	pth := path.Join(string(dir), string(m.Name()))
@@ -190,10 +196,6 @@ func (m *Message) Verify(c upspin.Config) error {
 		return fmt.Errorf("failed to discover message author's public key: %v", err)
 	}
 	return factotum.Verify(m.contentHash(), m.sig, key)
-}
-
-func NewMessage(author upspin.UserName, title string, parent MsgName, body io.Reader) *Message {
-	return &Message{Author: author, Title: title, Parent: parent, Body: body, Time: time.Now()}
 }
 
 func (m *Message) Name() MsgName { return m.Parent.NextName(m.Author) }
