@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/toqueteos/webbrowser"
+
 	"upspin.io/client"
 	"upspin.io/cmd/cacheserver/cacheutil"
 	"upspin.io/config"
@@ -206,6 +208,7 @@ func show(fs *flag.FlagSet, cmd string, args []string) {
 
 func download(fs *flag.FlagSet, cmd string, args []string) {
 	const usage = `<user> <conversation-name>`
+	var open = fs.Bool("open", false, "open the rendered conversation in a web broser")
 	fs.Usage = mkUsage(fs, cmd, usage)
 	fs.Parse(args)
 
@@ -245,8 +248,17 @@ func download(fs *flag.FlagSet, cmd string, args []string) {
 	conv, err := ReadConversation(cfg, title)
 	check(err)
 
-	err = ioutil.WriteFile(filepath.Join(title, "index.html"), conv.RenderHtml(), 0644)
+	html := filepath.Join(title, "index.html")
+	err = ioutil.WriteFile(html, conv.RenderHtml(), 0644)
 	check(err)
+
+	if *open {
+		abs, err := filepath.Abs(html)
+		check(err)
+		fmt.Println("file://" + abs)
+		err = webbrowser.Open("file://" + abs)
+		check(err)
+	}
 }
 
 func addfile(fs *flag.FlagSet, cmd string, args []string) {
