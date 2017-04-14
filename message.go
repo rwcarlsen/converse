@@ -173,11 +173,21 @@ func (m *Message) Send(c upspin.Config, recipient upspin.UserName) (err error) {
 		}
 	}
 
+	conv, err := ReadConversation(c, m.Title)
+	if err != nil {
+		return err
+	}
+	err = conv.AddParticipant(c, recipient)
+	if err != nil {
+		return err
+	}
+
 	dir := ConvPath(recipient, m.Title)
 	pth := ConvPath(recipient, m.Title, string(m.Name()))
 
 	cl := client.New(c)
 
+	// create directory
 	cl.MakeDirectory(dir)
 	if _, err = cl.Lookup(dir, false); err != nil {
 		return fmt.Errorf("failed to create conversation directory %v", dir)

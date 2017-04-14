@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"path"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/russross/blackfriday"
 
+	"upspin.io/access"
 	"upspin.io/client"
 	"upspin.io/upspin"
 )
@@ -56,17 +58,19 @@ func ListConversations(c upspin.Config) ([]upspin.PathName, error) {
 }
 
 type Conversation struct {
-	Messages []*Message
+	Messages     []*Message
+	Title        string
+	Participants []upspin.UserName
 }
 
-func ReadConversation(c upspin.Config, name upspin.PathName) (*Conversation, error) {
+func ReadConversation(c upspin.Config, title string) (*Conversation, error) {
 	cl := client.New(c)
-	ents, err := cl.Glob(string(name) + "/*")
+	ents, err := cl.Glob(string(ConvPath(c.UserName(), title, msgPrefix+"*-*."+msgExtension)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get conversation messages: %v", err)
 	}
 
-	conv := &Conversation{}
+	conv := &Conversation{Title: title}
 	for _, ent := range ents {
 		m, err := ReadMessage(cl, ent.SignedName)
 		if err != nil {
@@ -81,14 +85,77 @@ func ReadConversation(c upspin.Config, name upspin.PathName) (*Conversation, err
 		return (ni != nj && ni < nj) || (mi.Time.Unix() < mj.Time.Unix())
 	})
 
+	ac, err := readAccess(c, title)
+	if err != nil {
+		// read through messages to discover participants
+		for _, m := range conv.Messages {
+			err = conv.AddParticipant(c, m.Author)
+			if err != nil {
+				return nil, err
+			}
+		}
+	} else {
+		// load participants from access file
+		conv.Participants, err = ac.Users(access.Read, func(p upspin.PathName) ([]byte, error) { return cl.Get(p) })
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return conv, nil
 }
 
-func (c *Conversation) Title() string {
-	if len(c.Messages) > 0 {
-		return c.Messages[0].Title
+func (c *Conversation) isParticipant(u upspin.UserName) bool {
+	for _, user := range c.Participants {
+		if user == u {
+			return true
+		}
 	}
-	return ""
+	return false
+}
+
+func (c *Conversation) AddParticipant(cfg upspin.Config, u upspin.UserName) error {
+	if c.Title == "" {
+		return errors.New("cannot add participant to conversation with no title")
+	} else if c.isParticipant(u) {
+		return nil
+	}
+
+	cl := client.New(cfg)
+	pth := ConvPath(cfg.UserName(), c.Title, "Access")
+
+	var data []byte
+
+	_, err := cl.Lookup(pth, false)
+	if err != nil {
+		// create access file
+		data = []byte(fmt.Sprintf("*: %v", cfg.UserName()))
+	} else {
+		data, err = cl.Get(pth)
+		if err != nil {
+			return err
+		}
+	}
+
+	data = append(data, []byte(fmt.Sprintf("\nread,create,list: %v", u))...)
+
+	_, err = cl.Put(pth, data)
+	if err != nil {
+		return err
+	}
+
+	c.Participants = append(c.Participants, u)
+	return nil
+}
+
+func readAccess(c upspin.Config, title string) (*access.Access, error) {
+	cl := client.New(c)
+	pth := ConvPath(c.UserName(), title, "Access")
+	data, err := cl.Get(pth)
+	if err != nil {
+		return nil, err
+	}
+	return access.Parse(pth, data)
 }
 
 // TODO: figure out how to handle relative paths to images.  The images need
@@ -114,7 +181,7 @@ func (c *Conversation) String() string {
 }
 
 func (c *Conversation) Add(user upspin.UserName, body io.Reader) *Message {
-	m := NewMessage(user, c.Title(), c.nextParent(), body)
+	m := NewMessage(user, c.Title, c.nextParent(), body)
 	c.Messages = append(c.Messages, m)
 	return m
 }

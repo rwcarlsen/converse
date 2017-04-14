@@ -76,26 +76,30 @@ func send(fs *flag.FlagSet, cmd string, args []string) {
 		fs.Usage()
 	}
 
-	var m *Message
 	var err error
+	var m *Message
+	var conv *Conversation
 	if fs.NArg() == 0 {
 		m, err = ParseMessage(os.Stdin)
 		check(err)
+		conv, err = ReadConversation(cfg, m.Title)
+		check(err)
 	} else {
 		title := fs.Arg(0)
-		conv, err := ReadConversation(cfg, ConvPath(user, title))
+		conv, err = ReadConversation(cfg, title)
 		check(err)
 		m = conv.Add(user, bytes.NewBufferString(strings.Join(fs.Args()[1:], " ")))
 	}
 
-	um := map[string]struct{}{string(cfg.UserName()): struct{}{}}
 	for _, user := range strings.Split(*users, ",") {
 		if user != "" {
-			um[user] = struct{}{}
+			if err := conv.AddParticipant(cfg, upspin.UserName(user)); err != nil {
+				log.Printf("failed to add %v to conversation: %v", user, err)
+			}
 		}
 	}
 
-	for user := range um {
+	for user := range conv.Participants {
 		log.Print("sending to ", user)
 		if err := m.Send(cfg, upspin.UserName(user)); err != nil {
 			log.Printf("send to %v failed", user)
@@ -141,7 +145,7 @@ func create(fs *flag.FlagSet, cmd string, args []string) {
 		msg = strings.Join(fs.Args()[1:], " ")
 	}
 
-	conv, err := ReadConversation(cfg, ConvPath(user, title))
+	conv, err := ReadConversation(cfg, title)
 	if err != nil {
 		log.Printf("no existing conversation named '%v' found", title)
 	}
@@ -164,7 +168,7 @@ func show(fs *flag.FlagSet, cmd string, args []string) {
 		fs.Usage()
 	}
 
-	conv, err := ReadConversation(cfg, ConvPath(user, fs.Arg(0)))
+	conv, err := ReadConversation(cfg, fs.Arg(0))
 	check(err)
 
 	if *dohtml {
@@ -206,7 +210,7 @@ func verify(fs *flag.FlagSet, cmd string, args []string) {
 		fs.Usage()
 	}
 
-	conv, err := ReadConversation(cfg, ConvPath(user, fs.Arg(0)))
+	conv, err := ReadConversation(cfg, fs.Arg(0))
 	check(err)
 
 	for _, msg := range conv.Messages {
