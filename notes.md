@@ -1,4 +1,12 @@
 
+How to share with non-technical people:
+
+* blog-type disseminate-only content can be shared by creating a binary that
+  synchronizes conversations shared with them to a directory on their
+  computer.  This could be a simple double-click to sync go binary.  They
+  would, of course, need to have upspin keys installed on their system
+  somehow... hmmm...
+
 Data layout:
 
 * Each user can have a "conversations" directory in a standard location in
@@ -30,12 +38,16 @@ Data layout:
 Inviting People to a conversation:
 
 * When someone is invited to the conversation, they the inviter creates a new
-  folder in the invitee's conversations directory and also creates a file in
-  that directory containing the names of all conversation participant(s).
+  folder in the invitee's conversations directory and creates the message
+  initial message file that directory which contains the name of one of the
+  current conversation participants. The new invitee can then fetch any other
+  messages which will contain other participants and then fetch messages from
+  them, etc. until they have the full conversation.
 
 * When someone receives an invitation (a newly created conversations dir) to
-  participate in a new conversation, they will need to grant read access to
-  all participants to the conversation's directory in their upspin tree.
+  participate in a new conversation, they will need to grant
+  "create,read,list" access to all participants for the conversation's
+  directory in their upspin tree.
 
 * Participants in a conversation are controlled by the upspin Access
   file.  Access can be controlled, revoked, etc. at any time by just the
@@ -44,3 +56,8 @@ Inviting People to a conversation:
 * The conversations directory must provide create access to all people who you
   want to be able to start conversations with you from their end.
 
+* If you don't trust someone to have create access to any of your files but
+  still with to converse with them, you can have a fetch/pull-only
+  conversation with them and communicate that you wish to converse out-of-band
+  and each create your conversation folders with read,list access only for
+  each other.

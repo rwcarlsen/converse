@@ -171,6 +171,20 @@ func (c *Conversation) RenderHtml() []byte {
 	return blackfriday.MarkdownCommon(buf.Bytes())
 }
 
+func (c *Conversation) Publish(cfg upspin.Config) error {
+	if c.Title == "" {
+		return errors.New("cannot publish a conversation without a title")
+	}
+
+	cl := client.New(cfg)
+	pth := ConvPath(cfg.UserName(), c.Title, "index.html")
+	_, err := cl.Put(pth, c.RenderHtml())
+	if err != nil {
+		return fmt.Errorf("failed to create published 'index.html' file: %v", err)
+	}
+	return nil
+}
+
 func (c *Conversation) String() string {
 	var buf bytes.Buffer
 	for i, msg := range c.Messages {

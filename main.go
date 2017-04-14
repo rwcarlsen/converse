@@ -24,6 +24,7 @@ func init() {
 const usage = `converse [flags...] <subcmd>
 	list     list all existing conversations
 	show     print all messages in a conversation
+	publish  render+save a conversation as html in its dir
 	create   create and print signed message 
 	send     send a created message
 	addfile  add a file to a conversation
@@ -48,6 +49,8 @@ func main() {
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
 
 	switch cmd {
+	case "publish":
+		publish(fs, cmd, flag.Args()[1:])
 	case "addfile":
 		addfile(fs, cmd, flag.Args()[1:])
 	case "show":
@@ -99,12 +102,30 @@ func send(fs *flag.FlagSet, cmd string, args []string) {
 		}
 	}
 
-	for user := range conv.Participants {
+	for _, user := range conv.Participants {
 		log.Print("sending to ", user)
 		if err := m.Send(cfg, upspin.UserName(user)); err != nil {
 			log.Printf("send to %v failed", user)
 		}
 	}
+
+	check(conv.Publish(cfg))
+}
+
+func publish(fs *flag.FlagSet, cmd string, args []string) {
+	const usage = `<title>`
+	fs.Usage = mkUsage(fs, cmd, usage)
+	fs.Parse(args)
+
+	if fs.NArg() != 1 {
+		log.Println("Need exactly 1 argument")
+		fs.Usage()
+	}
+	title := fs.Arg(0)
+
+	conv, err := ReadConversation(cfg, title)
+	check(err)
+	check(conv.Publish(cfg))
 }
 
 func list(fs *flag.FlagSet, cmd string, args []string) {
