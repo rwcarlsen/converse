@@ -7,9 +7,11 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
+	"upspin.io/client"
 	"upspin.io/cmd/cacheserver/cacheutil"
 	"upspin.io/config"
 	"upspin.io/transports"
@@ -25,6 +27,7 @@ const usage = `converse [flags...] <subcmd>
 	list     list all existing conversations
 	show     print all messages in a conversation
 	publish  render+save a conversation as html in its dir
+	download download an entire conversation
 	create   create and print signed message 
 	send     send a created message
 	addfile  add a file to a conversation
@@ -49,6 +52,8 @@ func main() {
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
 
 	switch cmd {
+	case "download":
+		download(fs, cmd, flag.Args()[1:])
 	case "publish":
 		publish(fs, cmd, flag.Args()[1:])
 	case "addfile":
@@ -197,6 +202,51 @@ func show(fs *flag.FlagSet, cmd string, args []string) {
 	} else {
 		fmt.Print(conv)
 	}
+}
+
+func download(fs *flag.FlagSet, cmd string, args []string) {
+	const usage = `<user> <conversation-name>`
+	fs.Usage = mkUsage(fs, cmd, usage)
+	fs.Parse(args)
+
+	if fs.NArg() != 2 {
+		log.Println("Wrong number of arguments")
+		fs.Usage()
+	}
+
+	user, title := upspin.UserName(fs.Arg(0)), fs.Arg(1)
+
+	cl := client.New(cfg)
+	ents, err := cl.Glob(string(ConvPath(user, title, "*")))
+	check(err)
+
+	err = os.MkdirAll(title, 0755)
+	check(err)
+
+	for _, ent := range ents {
+		fpath := ent.SignedName
+		fname := path.Base(string(fpath))
+		if fname == "Access" {
+			continue
+		} else if strings.HasPrefix(fname, ".") {
+			continue
+		}
+
+		data, err := cl.Get(fpath)
+		if err != nil {
+			log.Printf("failed to download file %v: ", fname, err)
+		}
+		err = ioutil.WriteFile(filepath.Join(title, fname), data, 0644)
+		if err != nil {
+			log.Printf("failed to write file '%v' locally: %v", fname, err)
+		}
+	}
+
+	conv, err := ReadConversation(cfg, title)
+	check(err)
+
+	err = ioutil.WriteFile(filepath.Join(title, "index.html"), conv.RenderHtml(), 0644)
+	check(err)
 }
 
 func addfile(fs *flag.FlagSet, cmd string, args []string) {
