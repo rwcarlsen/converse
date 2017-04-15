@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/toqueteos/webbrowser"
+	"github.com/rwcarlsen/webbrowser"
 
 	"upspin.io/client"
 	"upspin.io/cmd/cacheserver/cacheutil"
