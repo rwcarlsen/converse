@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/rwcarlsen/webbrowser"
+	"github.com/bryanl/webbrowser"
 
 	"upspin.io/client"
 	"upspin.io/cmd/cacheserver/cacheutil"
@@ -255,8 +255,7 @@ func download(fs *flag.FlagSet, cmd string, args []string) {
 	if *open {
 		abs, err := filepath.Abs(html)
 		check(err)
-		fmt.Println("file://" + abs)
-		err = webbrowser.Open("file://" + abs)
+		err = webbrowser.Open(abs, webbrowser.NewTab, true)
 		check(err)
 	}
 }
