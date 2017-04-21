@@ -92,11 +92,11 @@ func send(fs *flag.FlagSet, cmd string, args []string) {
 	if fs.NArg() == 0 {
 		m, err = ParseMessage(os.Stdin)
 		check(err)
-		conv, err = ReadConversation(cfg, m.Title)
+		conv, err = ReadConversation(cfg, ConvPath(user, m.Title))
 		check(err)
 	} else {
 		title := fs.Arg(0)
-		conv, err = ReadConversation(cfg, title)
+		conv, err = ReadConversation(cfg, ConvPath(user, title))
 		check(err)
 		m = conv.Add(user, bytes.NewBufferString(strings.Join(fs.Args()[1:], " ")))
 	}
@@ -111,12 +111,12 @@ func send(fs *flag.FlagSet, cmd string, args []string) {
 
 	for _, user := range conv.Participants {
 		log.Print("sending to ", user)
-		if err := m.Send(cfg, upspin.UserName(user)); err != nil {
+		if err := m.Send(cfg, RootPath(user)); err != nil {
 			log.Printf("send to %v failed", user)
 		}
 	}
 
-	check(conv.Publish(cfg))
+	check(conv.Publish(cfg, RootPath(user)))
 }
 
 func publish(fs *flag.FlagSet, cmd string, args []string) {
@@ -130,9 +130,9 @@ func publish(fs *flag.FlagSet, cmd string, args []string) {
 	}
 	title := fs.Arg(0)
 
-	conv, err := ReadConversation(cfg, title)
+	conv, err := ReadConversation(cfg, ConvPath(user, title))
 	check(err)
-	check(conv.Publish(cfg))
+	check(conv.Publish(cfg, RootPath(user)))
 }
 
 func list(fs *flag.FlagSet, cmd string, args []string) {
@@ -145,11 +145,12 @@ func list(fs *flag.FlagSet, cmd string, args []string) {
 		fs.Usage()
 	}
 
-	convs, err := ListConversations(cfg)
+	convs, err := ListConversations(cfg, RootPath(user))
 	check(err)
 
+	preLen := len(string(cfg.UserName()) + "/" + ConverseDir + "/")
 	for _, conv := range convs {
-		fmt.Println(conv)
+		fmt.Println(conv[preLen:])
 	}
 }
 
@@ -173,7 +174,7 @@ func create(fs *flag.FlagSet, cmd string, args []string) {
 		msg = strings.Join(fs.Args()[1:], " ")
 	}
 
-	conv, err := ReadConversation(cfg, title)
+	conv, err := ReadConversation(cfg, ConvPath(user, title))
 	if err != nil {
 		log.Printf("no existing conversation named '%v' found", title)
 	}
@@ -196,7 +197,7 @@ func show(fs *flag.FlagSet, cmd string, args []string) {
 		fs.Usage()
 	}
 
-	conv, err := ReadConversation(cfg, fs.Arg(0))
+	conv, err := ReadConversation(cfg, ConvPath(user, fs.Arg(0)))
 	check(err)
 
 	if *dohtml {
@@ -220,7 +221,7 @@ func download(fs *flag.FlagSet, cmd string, args []string) {
 	user, title := upspin.UserName(fs.Arg(0)), fs.Arg(1)
 
 	cl := client.New(cfg)
-	ents, err := cl.Glob(string(ConvPath(user, title, "*")))
+	ents, err := cl.Glob(string(ConvPath(user, title)) + "/*")
 	check(err)
 
 	err = os.MkdirAll(title, 0755)
@@ -245,7 +246,7 @@ func download(fs *flag.FlagSet, cmd string, args []string) {
 		}
 	}
 
-	conv, err := ReadConversation(cfg, title)
+	conv, err := ReadConversation(cfg, ConvPath(user, title))
 	check(err)
 
 	html := filepath.Join(title, "index.html")
@@ -276,7 +277,7 @@ func addfile(fs *flag.FlagSet, cmd string, args []string) {
 			f, err := os.Open(fname)
 			check(err)
 			defer f.Close()
-			err = AddFile(cfg, title, filepath.Base(fname), f)
+			err = AddFile(cfg, join(ConvPath(user, title), filepath.Base(fname)), f)
 			check(err)
 		}()
 	}
@@ -292,7 +293,7 @@ func verify(fs *flag.FlagSet, cmd string, args []string) {
 		fs.Usage()
 	}
 
-	conv, err := ReadConversation(cfg, fs.Arg(0))
+	conv, err := ReadConversation(cfg, ConvPath(user, fs.Arg(0)))
 	check(err)
 
 	for _, msg := range conv.Messages {

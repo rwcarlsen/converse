@@ -16,6 +16,7 @@ import (
 	"upspin.io/bind"
 	"upspin.io/client"
 	"upspin.io/factotum"
+	upath "upspin.io/path"
 	"upspin.io/upspin"
 )
 
@@ -94,6 +95,7 @@ type Message struct {
 	Body    io.Reader
 	content string
 	sig     upspin.Signature
+	conv    *Conversation
 }
 
 func NewMessage(author upspin.UserName, title string, parent MsgName, body io.Reader) *Message {
@@ -163,27 +165,45 @@ func ParseMessage(r io.Reader) (*Message, error) {
 
 func (m *Message) Content() string { return m.content }
 
-func (m *Message) isSigned() bool { return m.sig.R != nil }
+func (m *Message) IsSigned() bool { return m.sig.R != nil }
 
-func (m *Message) Send(c upspin.Config, recipient upspin.UserName) (err error) {
-	if !m.isSigned() {
-		_, err := m.Sign(c)
+func (m *Message) Verify(c upspin.Config) error {
+	key, err := lookup(c, m.Author)
+	if err != nil {
+		return fmt.Errorf("failed to discover message author's public key: %v", err)
+	}
+	return factotum.Verify(m.contentHash(), m.sig, key)
+}
+
+func (m *Message) Name() MsgName { return m.Parent.NextName(m.Author) }
+
+func (m *Message) String() string {
+	content := strings.Replace(m.content, "\n", "\n    ", -1)
+	return fmt.Sprintf("%v on %v\n    %v\n",
+		m.Author, m.Time.Format(time.UnixDate), content)
+}
+
+func (m *Message) Send(c upspin.Config, root upspin.PathName) (err error) {
+	if !m.IsSigned() {
+		if _, err := m.Sign(c); err != nil {
+			return err
+		}
+	}
+
+	p, err := upath.Parse(root)
+	if err != nil {
+		return err
+	}
+
+	if m.conv != nil {
+		err = m.conv.AddParticipant(c, p.User())
 		if err != nil {
 			return err
 		}
 	}
 
-	conv, err := ReadConversation(c, m.Title)
-	if err != nil {
-		return err
-	}
-	err = conv.AddParticipant(c, recipient)
-	if err != nil {
-		return err
-	}
-
-	dir := ConvPath(recipient, m.Title)
-	pth := ConvPath(recipient, m.Title, string(m.Name()))
+	dir := join(root, m.Title)
+	pth := join(dir, string(m.Name()))
 
 	cl := client.New(c)
 
@@ -210,22 +230,6 @@ func (m *Message) Send(c upspin.Config, recipient upspin.UserName) (err error) {
 
 	_, err = io.Copy(f, bytes.NewBufferString(payload))
 	return err
-}
-
-func (m *Message) Verify(c upspin.Config) error {
-	key, err := lookup(c, m.Author)
-	if err != nil {
-		return fmt.Errorf("failed to discover message author's public key: %v", err)
-	}
-	return factotum.Verify(m.contentHash(), m.sig, key)
-}
-
-func (m *Message) Name() MsgName { return m.Parent.NextName(m.Author) }
-
-func (m *Message) String() string {
-	content := strings.Replace(m.content, "\n", "\n    ", -1)
-	return fmt.Sprintf("%v on %v\n    %v\n",
-		m.Author, m.Time.Format(time.UnixDate), content)
 }
 
 func (m *Message) contentHash() []byte {
@@ -262,7 +266,7 @@ func (m *Message) Payload() (string, error) {
 }
 
 func (m *Message) Sign(c upspin.Config) (payload string, err error) {
-	if m.isSigned() {
+	if m.IsSigned() {
 		return "", errors.New("cannot re-sign signed message")
 	}
 
