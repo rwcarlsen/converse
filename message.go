@@ -13,10 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"upspin.io/bind"
 	"upspin.io/client"
 	"upspin.io/factotum"
-	upath "upspin.io/path"
 	"upspin.io/upspin"
 )
 
@@ -30,20 +28,6 @@ const (
 	msgHeaderMarker = "-------------------------- END HEADER --------------------------\n\n"
 	sigBase         = 16
 )
-
-// lookup returns the public key for a given upspin user using the key server
-// endpoint contained in the given upspin config.
-func lookup(config upspin.Config, name upspin.UserName) (key upspin.PublicKey, err error) {
-	keyserv, err := bind.KeyServer(config, config.KeyEndpoint())
-	if err != nil {
-		return key, err
-	}
-	user, err := keyserv.Lookup(name)
-	if err != nil {
-		return key, err
-	}
-	return user.PublicKey, nil
-}
 
 type MsgName string
 
@@ -95,7 +79,6 @@ type Message struct {
 	Body    io.Reader
 	content string
 	sig     upspin.Signature
-	conv    *Conversation
 }
 
 func NewMessage(author upspin.UserName, title string, parent MsgName, body io.Reader) *Message {
@@ -167,69 +150,12 @@ func (m *Message) Content() string { return m.content }
 
 func (m *Message) IsSigned() bool { return m.sig.R != nil }
 
-func (m *Message) Verify(c upspin.Config) error {
-	key, err := lookup(c, m.Author)
-	if err != nil {
-		return fmt.Errorf("failed to discover message author's public key: %v", err)
-	}
-	return factotum.Verify(m.contentHash(), m.sig, key)
-}
-
 func (m *Message) Name() MsgName { return m.Parent.NextName(m.Author) }
 
 func (m *Message) String() string {
 	content := strings.Replace(m.content, "\n", "\n    ", -1)
 	return fmt.Sprintf("%v on %v\n    %v\n",
 		m.Author, m.Time.Format(time.UnixDate), content)
-}
-
-func (m *Message) Send(c upspin.Config, root upspin.PathName) (err error) {
-	if !m.IsSigned() {
-		if _, err := m.Sign(c); err != nil {
-			return err
-		}
-	}
-
-	p, err := upath.Parse(root)
-	if err != nil {
-		return err
-	}
-
-	if m.conv != nil {
-		err = m.conv.AddParticipant(c, p.User())
-		if err != nil {
-			return err
-		}
-	}
-
-	dir := join(root, m.Title)
-	pth := join(dir, string(m.Name()))
-
-	cl := client.New(c)
-
-	// create directory
-	cl.MakeDirectory(dir)
-	if _, err = cl.Lookup(dir, false); err != nil {
-		return fmt.Errorf("failed to create conversation directory %v", dir)
-	}
-
-	f, err := cl.Create(pth)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err2 := f.Close(); err == nil {
-			err = err2
-		}
-	}()
-
-	payload, err := m.Payload()
-	if err != nil {
-		return err
-	}
-
-	_, err = io.Copy(f, bytes.NewBufferString(payload))
-	return err
 }
 
 func (m *Message) contentHash() []byte {
@@ -265,9 +191,48 @@ func (m *Message) Payload() (string, error) {
 	return m.payloadNoSig() + m.payloadSigOnly(), nil
 }
 
+func (m *Message) Send(c upspin.Config, root upspin.PathName) (err error) {
+	if !m.IsSigned() {
+		if _, err := m.Sign(c); err != nil {
+			return err
+		}
+	}
+
+	dir := join(root, m.Title)
+	pth := join(dir, string(m.Name()))
+
+	cl := client.New(c)
+
+	// create directory
+	cl.MakeDirectory(dir)
+	if _, err = cl.Lookup(dir, false); err != nil {
+		return fmt.Errorf("failed to create conversation directory %v", dir)
+	}
+
+	f, err := cl.Create(pth)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err2 := f.Close(); err == nil {
+			err = err2
+		}
+	}()
+
+	payload, err := m.Payload()
+	if err != nil {
+		return err
+	}
+
+	_, err = io.Copy(f, bytes.NewBufferString(payload))
+	return err
+}
+
 func (m *Message) Sign(c upspin.Config) (payload string, err error) {
 	if m.IsSigned() {
 		return "", errors.New("cannot re-sign signed message")
+	} else if m.Author != c.UserName() {
+		return "", fmt.Errorf("signing user differs from author: '%v' != '%v'", c.UserName(), m.Author)
 	}
 
 	data, err := ioutil.ReadAll(m.Body)
@@ -282,4 +247,12 @@ func (m *Message) Sign(c upspin.Config) (payload string, err error) {
 	}
 
 	return m.payloadNoSig() + m.payloadSigOnly(), nil
+}
+
+func (m *Message) Verify(c upspin.Config) error {
+	key, err := lookup(c, m.Author)
+	if err != nil {
+		return fmt.Errorf("failed to discover message author's public key: %v", err)
+	}
+	return factotum.Verify(m.contentHash(), m.sig, key)
 }

@@ -41,6 +41,7 @@ const defaultConfigPath = "$HOME/upspin/config"
 var configPath = flag.String("config", defaultConfigPath, "upspin config file")
 
 var cfg upspin.Config
+var cl upspin.Client
 var user upspin.UserName
 
 func main() {
@@ -92,11 +93,11 @@ func send(fs *flag.FlagSet, cmd string, args []string) {
 	if fs.NArg() == 0 {
 		m, err = ParseMessage(os.Stdin)
 		check(err)
-		conv, err = ReadConversation(cfg, ConvPath(user, m.Title))
+		conv, err = ReadConversation(cl, ConvPath(user, m.Title))
 		check(err)
 	} else {
 		title := fs.Arg(0)
-		conv, err = ReadConversation(cfg, ConvPath(user, title))
+		conv, err = ReadConversation(cl, ConvPath(user, title))
 		check(err)
 		m = conv.Add(user, bytes.NewBufferString(strings.Join(fs.Args()[1:], " ")))
 	}
@@ -116,7 +117,7 @@ func send(fs *flag.FlagSet, cmd string, args []string) {
 		}
 	}
 
-	check(conv.Publish(cfg, RootPath(user)))
+	check(conv.Publish(cl, RootPath(user)))
 }
 
 func publish(fs *flag.FlagSet, cmd string, args []string) {
@@ -130,9 +131,9 @@ func publish(fs *flag.FlagSet, cmd string, args []string) {
 	}
 	title := fs.Arg(0)
 
-	conv, err := ReadConversation(cfg, ConvPath(user, title))
+	conv, err := ReadConversation(cl, ConvPath(user, title))
 	check(err)
-	check(conv.Publish(cfg, RootPath(user)))
+	check(conv.Publish(cl, RootPath(user)))
 }
 
 func list(fs *flag.FlagSet, cmd string, args []string) {
@@ -145,7 +146,7 @@ func list(fs *flag.FlagSet, cmd string, args []string) {
 		fs.Usage()
 	}
 
-	convs, err := ListConversations(cfg, RootPath(user))
+	convs, err := ListConversations(cl, RootPath(user))
 	check(err)
 
 	preLen := len(string(cfg.UserName()) + "/" + ConverseDir + "/")
@@ -174,7 +175,7 @@ func create(fs *flag.FlagSet, cmd string, args []string) {
 		msg = strings.Join(fs.Args()[1:], " ")
 	}
 
-	conv, err := ReadConversation(cfg, ConvPath(user, title))
+	conv, err := ReadConversation(cl, ConvPath(user, title))
 	if err != nil {
 		log.Printf("no existing conversation named '%v' found", title)
 	}
@@ -197,7 +198,7 @@ func show(fs *flag.FlagSet, cmd string, args []string) {
 		fs.Usage()
 	}
 
-	conv, err := ReadConversation(cfg, ConvPath(user, fs.Arg(0)))
+	conv, err := ReadConversation(cl, ConvPath(user, fs.Arg(0)))
 	check(err)
 
 	if *dohtml {
@@ -220,7 +221,6 @@ func download(fs *flag.FlagSet, cmd string, args []string) {
 
 	user, title := upspin.UserName(fs.Arg(0)), fs.Arg(1)
 
-	cl := client.New(cfg)
 	ents, err := cl.Glob(string(ConvPath(user, title)) + "/*")
 	check(err)
 
@@ -246,7 +246,7 @@ func download(fs *flag.FlagSet, cmd string, args []string) {
 		}
 	}
 
-	conv, err := ReadConversation(cfg, ConvPath(user, title))
+	conv, err := ReadConversation(cl, ConvPath(user, title))
 	check(err)
 
 	html := filepath.Join(title, "index.html")
@@ -277,7 +277,7 @@ func addfile(fs *flag.FlagSet, cmd string, args []string) {
 			f, err := os.Open(fname)
 			check(err)
 			defer f.Close()
-			err = AddFile(cfg, join(ConvPath(user, title), filepath.Base(fname)), f)
+			err = AddFile(cl, join(ConvPath(user, title), filepath.Base(fname)), f)
 			check(err)
 		}()
 	}
@@ -293,7 +293,7 @@ func verify(fs *flag.FlagSet, cmd string, args []string) {
 		fs.Usage()
 	}
 
-	conv, err := ReadConversation(cfg, ConvPath(user, fs.Arg(0)))
+	conv, err := ReadConversation(cl, ConvPath(user, fs.Arg(0)))
 	check(err)
 
 	for _, msg := range conv.Messages {
@@ -321,6 +321,7 @@ func loadConfig(path string) {
 		check(err)
 	}
 	user = cfg.UserName()
+	cl = client.New(cfg)
 
 	transports.Init(cfg)
 	cacheutil.Start(cfg)
