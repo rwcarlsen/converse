@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/russross/blackfriday"
@@ -53,23 +54,45 @@ func NewConversation(root upspin.PathName, title string) *Conversation {
 	return &Conversation{title: title, Location: join(root, title)}
 }
 
+func (c *Conversation) Init(cl upspin.Client) error {
+	// create directory if it doesn't exist
+	_, err := cl.Lookup(c.Location, false)
+	if err != nil {
+		dir := ""
+		for i, d := range strings.Split(string(c.Location), "/") {
+			if d == "" {
+				continue
+			} else if i > 0 {
+				dir = dir + "/"
+			}
+			dir += d
+			cl.MakeDirectory(upspin.PathName(dir))
+		}
+	}
+	_, err = cl.Lookup(c.Location, false)
+	if err != nil {
+		return fmt.Errorf("failed to create conversation dir: %v", err)
+	}
+	return nil
+}
+
 func ReadConversation(cl upspin.Client, dir upspin.PathName) (*Conversation, error) {
+	conv := &Conversation{Location: dir}
+	if err := conv.Init(cl); err != nil {
+		return nil, err
+	}
+
 	ents, err := cl.Glob(string(join(dir, msgPrefix+"*-*."+msgExtension)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get conversation messages: %v", err)
 	}
 
-	conv := &Conversation{Location: dir}
 	for _, ent := range ents {
 		m, err := ReadMessage(cl, ent.SignedName)
 		if err != nil {
 			return nil, fmt.Errorf("failed to open message '%v': %v", ent.SignedName, err)
 		}
 		conv.Messages = append(conv.Messages, m)
-	}
-
-	if len(conv.Messages) == 0 {
-		return nil, fmt.Errorf("conversation '%v' has no messages", dir)
 	}
 
 	sort.Slice(conv.Messages, func(i, j int) bool {
@@ -143,9 +166,7 @@ func (c *Conversation) nextParent() MsgName {
 }
 
 func (c *Conversation) AddParticipant(cfg upspin.Config, u upspin.UserName) error {
-	if c.Title() == "" {
-		return errors.New("cannot add participant to conversation with no title")
-	} else if c.isParticipant(u) {
+	if c.isParticipant(u) {
 		return nil
 	}
 

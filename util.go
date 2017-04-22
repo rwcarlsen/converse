@@ -9,6 +9,10 @@ import (
 	"upspin.io/upspin"
 )
 
+func Synchronize(cl upspin.Client, src, dst upspin.PathName) error {
+	panic("unimplemented")
+}
+
 func AddFile(cl upspin.Client, fpath upspin.PathName, r io.Reader) (err error) {
 	f, err := cl.Create(fpath)
 	if err != nil {
