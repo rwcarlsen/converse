@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/russross/blackfriday"
@@ -54,26 +53,16 @@ func NewConversation(root upspin.PathName, title string) *Conversation {
 	return &Conversation{title: title, Location: join(root, title)}
 }
 
-func (c *Conversation) Init(cl upspin.Client) error {
-	// create directory if it doesn't exist
-	_, err := cl.Lookup(c.Location, false)
-	if err != nil {
-		dir := ""
-		for i, d := range strings.Split(string(c.Location), "/") {
-			if d == "" {
-				continue
-			} else if i > 0 {
-				dir = dir + "/"
-			}
-			dir += d
-			cl.MakeDirectory(upspin.PathName(dir))
-		}
+func (c *Conversation) SetTitle(title string) error {
+	if c.Title() != "" {
+		return errors.New("cannot set title on a titled conversation")
 	}
-	_, err = cl.Lookup(c.Location, false)
-	if err != nil {
-		return fmt.Errorf("failed to create conversation dir: %v", err)
-	}
+	c.title = title
 	return nil
+}
+
+func (c *Conversation) Init(cl upspin.Client) error {
+	return MakeDirs(cl, c.Location)
 }
 
 func ReadConversation(cl upspin.Client, dir upspin.PathName) (*Conversation, error) {
@@ -153,6 +142,9 @@ func (c *Conversation) String() string {
 }
 
 func (c *Conversation) Add(user upspin.UserName, body io.Reader) *Message {
+	if c.Title() == "" {
+		panic("cannot add messages to untitled conversation")
+	}
 	m := NewMessage(user, c.Title(), c.nextParent(), body)
 	c.Messages = append(c.Messages, m)
 	return m
@@ -165,12 +157,34 @@ func (c *Conversation) nextParent() MsgName {
 	return c.Messages[len(c.Messages)-1].Name()
 }
 
-func (c *Conversation) AddParticipant(cfg upspin.Config, u upspin.UserName) error {
-	if c.isParticipant(u) {
-		return nil
+func (c *Conversation) hasAccess(cl upspin.Client, root upspin.PathName, u upspin.UserName) bool {
+	ac, err := readAccess(cl, join(root, c.Title()))
+	if err != nil {
+		return false
+	}
+
+	users, err := ac.Users(access.Read, func(p upspin.PathName) ([]byte, error) { return cl.Get(p) })
+	if err != nil {
+		return false
+	}
+	for _, hasAccess := range users {
+		if u == hasAccess {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *Conversation) AddParticipant(cfg upspin.Config, root upspin.PathName, u upspin.UserName) error {
+	if !c.isParticipant(u) {
+		c.Participants = append(c.Participants, u)
 	}
 
 	cl := client.New(cfg)
+	if c.hasAccess(cl, root, u) {
+		return nil
+	}
+
 	pth := join(c.Location, "Access")
 
 	var data []byte
@@ -193,7 +207,6 @@ func (c *Conversation) AddParticipant(cfg upspin.Config, u upspin.UserName) erro
 		return err
 	}
 
-	c.Participants = append(c.Participants, u)
 	return nil
 }
 

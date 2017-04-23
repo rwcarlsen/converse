@@ -203,9 +203,7 @@ func (m *Message) Send(c upspin.Config, root upspin.PathName) (err error) {
 
 	cl := client.New(c)
 
-	// create directory
-	cl.MakeDirectory(dir)
-	if _, err = cl.Lookup(dir, false); err != nil {
+	if err := MakeDirs(cl, dir); err != nil {
 		return fmt.Errorf("failed to create conversation directory %v", dir)
 	}
 

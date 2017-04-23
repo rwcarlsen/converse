@@ -22,10 +22,16 @@ import (
 
 func init() {
 	log.SetFlags(0)
-	flag.Usage = func() { fmt.Print(usage) }
+	flag.Usage = func() {
+		fmt.Println(usage)
+		flag.PrintDefaults()
+		fmt.Print(subUsage)
+	}
 }
 
-const usage = `converse [flags...] <subcmd>
+const usage = `converse [flags...] <subcmd>`
+const subUsage = `
+Subcommands:
 	list     list all existing conversations
 	show     print all messages in a conversation
 	publish  render+save a conversation as html in its dir
@@ -48,7 +54,8 @@ var user upspin.UserName
 func main() {
 	flag.Parse()
 	if flag.NArg() < 1 {
-		log.Fatal(usage)
+		flag.Usage()
+		os.Exit(1)
 	}
 
 	loadConfig(*configPath)
@@ -80,18 +87,37 @@ func main() {
 }
 
 func sync(fs *flag.FlagSet, cmd string, args []string) {
-	const usage = `<title> <users>...]`
+	const usage = `<title>`
+	with := fs.String("with", "", "list of `users` to sync from")
 	fs.Usage = mkUsage(fs, cmd, usage)
 	fs.Parse(args)
 
-	if fs.NArg() < 2 {
-		log.Println("Need 2+ arguments")
+	if fs.NArg() != 1 {
+		log.Println("Need 1 argument")
 		fs.Usage()
 	}
 
+	// collect all participants in the conversation
 	title := fs.Arg(0)
-	for _, u := range fs.Args()[1:] {
-		err := Synchronize(cl, ConvPath(user, title), ConvPath(upspin.UserName(u), title))
+	conv, err := ReadConversation(cl, ConvPath(user, title))
+	check(err)
+
+	syncers := map[upspin.UserName]struct{}{}
+	for _, u := range conv.Participants {
+		syncers[u] = struct{}{}
+	}
+	for _, u := range strings.Split(*with, ",") {
+		if u == "" {
+			continue
+		}
+		syncers[upspin.UserName(u)] = struct{}{}
+	}
+
+	// copy all files from all participants
+	for u := range syncers {
+		err := Synchronize(cl, ConvPath(u, title), ConvPath(user, title))
+		check(err)
+		err = conv.AddParticipant(cfg, RootPath(user), u)
 		check(err)
 	}
 }
@@ -119,22 +145,26 @@ func send(fs *flag.FlagSet, cmd string, args []string) {
 		title := fs.Arg(0)
 		conv, err = ReadConversation(cl, ConvPath(user, title))
 		check(err)
+		if conv.Title() == "" {
+			err := conv.SetTitle(title)
+			check(err)
+		}
 		m = conv.Add(user, bytes.NewBufferString(strings.Join(fs.Args()[1:], " ")))
 	}
 
 	*users = *users + "," + string(user)
-	for _, user := range strings.Split(*users, ",") {
-		if user != "" {
-			if err := conv.AddParticipant(cfg, upspin.UserName(user)); err != nil {
-				log.Printf("failed to add %v to conversation: %v", user, err)
+	for _, u := range strings.Split(*users, ",") {
+		if u != "" {
+			if err := conv.AddParticipant(cfg, RootPath(user), upspin.UserName(u)); err != nil {
+				log.Printf("failed to add %v to conversation: %v", u, err)
 			}
 		}
 	}
 
-	for _, user := range conv.Participants {
-		log.Print("sending to ", user)
-		if err := m.Send(cfg, RootPath(user)); err != nil {
-			log.Printf("send to %v failed", user)
+	for _, u := range conv.Participants {
+		log.Print("sending to ", u)
+		if err := m.Send(cfg, RootPath(u)); err != nil {
+			log.Printf("send to %v failed", u)
 		}
 	}
 
