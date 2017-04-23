@@ -53,18 +53,6 @@ func NewConversation(root upspin.PathName, title string) *Conversation {
 	return &Conversation{title: title, Location: join(root, title)}
 }
 
-func (c *Conversation) SetTitle(title string) error {
-	if c.Title() != "" {
-		return errors.New("cannot set title on a titled conversation")
-	}
-	c.title = title
-	return nil
-}
-
-func (c *Conversation) Init(cl upspin.Client) error {
-	return MakeDirs(cl, c.Location)
-}
-
 func ReadConversation(cl upspin.Client, dir upspin.PathName) (*Conversation, error) {
 	conv := &Conversation{Location: dir}
 	if err := conv.Init(cl); err != nil {
@@ -105,6 +93,18 @@ func ReadConversation(cl upspin.Client, dir upspin.PathName) (*Conversation, err
 	}
 
 	return conv, nil
+}
+
+func (c *Conversation) SetTitle(title string) error {
+	if c.Title() != "" {
+		return errors.New("cannot set title on a titled conversation")
+	}
+	c.title = title
+	return nil
+}
+
+func (c *Conversation) Init(cl upspin.Client) error {
+	return MakeDirs(cl, c.Location)
 }
 
 func (c *Conversation) isParticipant(u upspin.UserName) bool {
@@ -157,8 +157,8 @@ func (c *Conversation) nextParent() MsgName {
 	return c.Messages[len(c.Messages)-1].Name()
 }
 
-func (c *Conversation) hasAccess(cl upspin.Client, root upspin.PathName, u upspin.UserName) bool {
-	ac, err := readAccess(cl, join(root, c.Title()))
+func (c *Conversation) hasAccess(cl upspin.Client, u upspin.UserName) bool {
+	ac, err := readAccess(cl, c.Location)
 	if err != nil {
 		return false
 	}
@@ -175,13 +175,13 @@ func (c *Conversation) hasAccess(cl upspin.Client, root upspin.PathName, u upspi
 	return false
 }
 
-func (c *Conversation) AddParticipant(cfg upspin.Config, root upspin.PathName, u upspin.UserName) error {
+func (c *Conversation) AddParticipant(cfg upspin.Config, u upspin.UserName) error {
 	if !c.isParticipant(u) {
 		c.Participants = append(c.Participants, u)
 	}
 
 	cl := client.New(cfg)
-	if c.hasAccess(cl, root, u) {
+	if c.hasAccess(cl, u) {
 		return nil
 	}
 
@@ -210,12 +210,12 @@ func (c *Conversation) AddParticipant(cfg upspin.Config, root upspin.PathName, u
 	return nil
 }
 
-func (c *Conversation) Publish(cl upspin.Client, root upspin.PathName) error {
+func (c *Conversation) Publish(cl upspin.Client) error {
 	if len(c.Messages) == 0 {
 		return errors.New("cannot publish a conversation without no messages")
 	}
 
-	pth := join(root, c.Title(), "index.html")
+	pth := join(c.Location, "index.html")
 	_, err := cl.Put(pth, c.RenderHtml())
 	if err != nil {
 		return fmt.Errorf("failed to create published 'index.html' file: %v", err)

@@ -117,7 +117,7 @@ func sync(fs *flag.FlagSet, cmd string, args []string) {
 	for u := range syncers {
 		err := Synchronize(cl, ConvPath(u, title), ConvPath(user, title))
 		check(err)
-		err = conv.AddParticipant(cfg, RootPath(user), u)
+		err = conv.AddParticipant(cfg, u)
 		check(err)
 	}
 }
@@ -155,7 +155,7 @@ func send(fs *flag.FlagSet, cmd string, args []string) {
 	*users = *users + "," + string(user)
 	for _, u := range strings.Split(*users, ",") {
 		if u != "" {
-			if err := conv.AddParticipant(cfg, RootPath(user), upspin.UserName(u)); err != nil {
+			if err := conv.AddParticipant(cfg, upspin.UserName(u)); err != nil {
 				log.Printf("failed to add %v to conversation: %v", u, err)
 			}
 		}
@@ -168,7 +168,7 @@ func send(fs *flag.FlagSet, cmd string, args []string) {
 		}
 	}
 
-	check(conv.Publish(cl, RootPath(user)))
+	check(conv.Publish(cl))
 }
 
 func publish(fs *flag.FlagSet, cmd string, args []string) {
@@ -184,7 +184,7 @@ func publish(fs *flag.FlagSet, cmd string, args []string) {
 
 	conv, err := ReadConversation(cl, ConvPath(user, title))
 	check(err)
-	check(conv.Publish(cl, RootPath(user)))
+	check(conv.Publish(cl))
 }
 
 func list(fs *flag.FlagSet, cmd string, args []string) {
