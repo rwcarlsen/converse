@@ -89,36 +89,50 @@ func main() {
 func sync(fs *flag.FlagSet, cmd string, args []string) {
 	const usage = `<title>`
 	with := fs.String("with", "", "list of `users` to sync from")
+	all := fs.Bool("all", false, "true to sync all known conversations")
 	fs.Usage = mkUsage(fs, cmd, usage)
 	fs.Parse(args)
 
-	if fs.NArg() != 1 {
-		log.Println("Need 1 argument")
+	if fs.NArg() != 1 && !*all {
+		log.Println("Need title argument")
 		fs.Usage()
 	}
 
-	// collect all participants in the conversation
-	title := fs.Arg(0)
-	conv, err := ReadConversation(cl, ConvPath(user, title))
-	check(err)
-
-	syncers := map[upspin.UserName]struct{}{}
-	for _, u := range conv.Participants {
-		syncers[u] = struct{}{}
+	convpaths := []upspin.PathName{}
+	if *all {
+		pths, err := ListConversations(cl, RootPath(user))
+		check(err)
+		convpaths = append(convpaths, pths...)
+	} else {
+		convpaths = append(convpaths, ConvPath(user, fs.Arg(0)))
 	}
-	for _, u := range strings.Split(*with, ",") {
-		if u == "" {
+
+	for _, convpath := range convpaths {
+		conv, err := ReadConversation(cl, convpath)
+		check(err)
+		if conv.Title() == "" {
 			continue
 		}
-		syncers[upspin.UserName(u)] = struct{}{}
-	}
 
-	// copy all files from all participants
-	for u := range syncers {
-		err := Synchronize(cl, ConvPath(u, title), ConvPath(user, title))
-		check(err)
-		err = conv.AddParticipant(cfg, u)
-		check(err)
+		// collect all participants in the conversation
+		syncers := map[upspin.UserName]struct{}{}
+		for _, u := range conv.Participants {
+			syncers[u] = struct{}{}
+		}
+		for _, u := range strings.Split(*with, ",") {
+			if u == "" {
+				continue
+			}
+			syncers[upspin.UserName(u)] = struct{}{}
+		}
+
+		// copy all files from *all* participants
+		for u := range syncers {
+			err := Synchronize(cl, ConvPath(u, conv.Title()), convpath)
+			check(err)
+			err = conv.AddParticipant(cfg, u)
+			check(err)
+		}
 	}
 }
 
