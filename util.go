@@ -38,7 +38,7 @@ func MakeDirs(cl upspin.Client, p upspin.PathName) error {
 }
 
 func recursiveList(cl upspin.Client, p upspin.PathName) ([]*upspin.DirEntry, error) {
-	ents, err := cl.Glob(string(join(p, "*")))
+	ents, err := cl.Glob(string(Join(p, "*")))
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +117,7 @@ func Synchronize(cl upspin.Client, src, dst upspin.PathName) error {
 			return err
 		}
 		srcpath := ent.SignedName
-		dstpath := join(upspin.PathName(pdst.User()), p.FilePath())
+		dstpath := Join(upspin.PathName(pdst.User()), p.FilePath())
 		_, err = cl.Lookup(dstpath, false)
 		if err == nil {
 			continue // file exists at destination already
@@ -145,14 +145,14 @@ func AddFile(cl upspin.Client, fpath upspin.PathName, r io.Reader) (err error) {
 	return err
 }
 
-// join builds an upspin path for the given upspin path and the passed path elements joined
+// Join builds an upspin path for the given upspin path and the passed path elements joined
 // together.
-func join(u upspin.PathName, paths ...string) upspin.PathName {
+func Join(u upspin.PathName, paths ...string) upspin.PathName {
 	return upspin.PathName(path.Join(append([]string{string(u)}, paths...)...))
 }
 
 func readAccess(cl upspin.Client, dir upspin.PathName) (*access.Access, error) {
-	pth := join(dir, "Access")
+	pth := Join(dir, "Access")
 	data, err := cl.Get(pth)
 	if err != nil {
 		return nil, err

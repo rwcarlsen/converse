@@ -16,18 +16,19 @@ import (
 )
 
 const msgSeparator = "---------------------------- msg %v -------------------------------\n"
-const ConverseDir = "conversations"
+const DefaultConverseDir = "conversations"
 
 func ConvPath(u upspin.UserName, title string) upspin.PathName {
-	return join(RootPath(u), title)
+	return Join(DefaultRoot(u), title)
 }
 
-func RootPath(u upspin.UserName) upspin.PathName {
-	return join(upspin.PathName(u), ConverseDir)
+//
+func DefaultRoot(u upspin.UserName) upspin.PathName {
+	return Join(upspin.PathName(u), DefaultConverseDir)
 }
 
 func ListConversations(cl upspin.Client, root upspin.PathName) ([]upspin.PathName, error) {
-	pth := string(join(root, "*"))
+	pth := string(Join(root, "*"))
 
 	ents, err := cl.Glob(pth)
 	if err != nil {
@@ -50,7 +51,7 @@ type Conversation struct {
 }
 
 func NewConversation(root upspin.PathName, title string) *Conversation {
-	return &Conversation{title: title, Location: join(root, title)}
+	return &Conversation{title: title, Location: Join(root, title)}
 }
 
 func ReadConversation(cl upspin.Client, dir upspin.PathName) (*Conversation, error) {
@@ -59,7 +60,7 @@ func ReadConversation(cl upspin.Client, dir upspin.PathName) (*Conversation, err
 		return nil, err
 	}
 
-	ents, err := cl.Glob(string(join(dir, msgPrefix+"*-*."+msgExtension)))
+	ents, err := cl.Glob(string(Join(dir, msgPrefix+"*-*."+msgExtension)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get conversation messages: %v", err)
 	}
@@ -185,7 +186,7 @@ func (c *Conversation) AddParticipant(cfg upspin.Config, u upspin.UserName) erro
 		return nil
 	}
 
-	pth := join(c.Location, "Access")
+	pth := Join(c.Location, "Access")
 
 	var data []byte
 
@@ -215,7 +216,7 @@ func (c *Conversation) Publish(cl upspin.Client) error {
 		return errors.New("cannot publish a conversation without no messages")
 	}
 
-	pth := join(c.Location, "index.html")
+	pth := Join(c.Location, "index.html")
 	_, err := cl.Put(pth, c.RenderHtml())
 	if err != nil {
 		return fmt.Errorf("failed to create published 'index.html' file: %v", err)

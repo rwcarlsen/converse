@@ -46,10 +46,12 @@ Subcommands:
 const defaultConfigPath = "$HOME/upspin/config"
 
 var configPath = flag.String("config", defaultConfigPath, "upspin config file")
+var rootdir = flag.String("root", DefaultConverseDir, "root conversations directory")
 
 var cfg upspin.Config
 var cl upspin.Client
 var user upspin.UserName
+var root upspin.PathName
 
 func main() {
 	flag.Parse()
@@ -100,7 +102,7 @@ func sync(fs *flag.FlagSet, cmd string, args []string) {
 
 	convpaths := []upspin.PathName{}
 	if *all {
-		pths, err := ListConversations(cl, RootPath(user))
+		pths, err := ListConversations(cl, root)
 		check(err)
 		convpaths = append(convpaths, pths...)
 	} else {
@@ -177,7 +179,7 @@ func send(fs *flag.FlagSet, cmd string, args []string) {
 
 	for _, u := range conv.Participants {
 		log.Print("sending to ", u)
-		if err := m.Send(cfg, RootPath(u)); err != nil {
+		if err := m.Send(cfg, DefaultRoot(u)); err != nil {
 			log.Printf("send to %v failed", u)
 		}
 	}
@@ -211,10 +213,10 @@ func list(fs *flag.FlagSet, cmd string, args []string) {
 		fs.Usage()
 	}
 
-	convs, err := ListConversations(cl, RootPath(user))
+	convs, err := ListConversations(cl, root)
 	check(err)
 
-	preLen := len(string(cfg.UserName()) + "/" + ConverseDir + "/")
+	preLen := len(root + "/")
 	for _, conv := range convs {
 		fmt.Println(conv[preLen:])
 	}
@@ -342,7 +344,7 @@ func addfile(fs *flag.FlagSet, cmd string, args []string) {
 			f, err := os.Open(fname)
 			check(err)
 			defer f.Close()
-			err = AddFile(cl, join(ConvPath(user, title), filepath.Base(fname)), f)
+			err = AddFile(cl, Join(ConvPath(user, title), filepath.Base(fname)), f)
 			check(err)
 		}()
 	}
@@ -387,6 +389,8 @@ func loadConfig(path string) {
 	}
 	user = cfg.UserName()
 	cl = client.New(cfg)
+
+	root = Join(upspin.PathName(user), *rootdir)
 
 	transports.Init(cfg)
 	cacheutil.Start(cfg)

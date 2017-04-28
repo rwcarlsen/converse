@@ -198,8 +198,8 @@ func (m *Message) Send(c upspin.Config, root upspin.PathName) (err error) {
 		}
 	}
 
-	dir := join(root, m.Title)
-	pth := join(dir, string(m.Name()))
+	dir := Join(root, m.Title)
+	pth := Join(dir, string(m.Name()))
 
 	cl := client.New(c)
 
