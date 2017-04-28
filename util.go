@@ -3,7 +3,10 @@ package main
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
+	"os"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"upspin.io/access"
@@ -172,4 +175,68 @@ func lookup(config upspin.Config, name upspin.UserName) (key upspin.PublicKey, e
 		return key, err
 	}
 	return user.PublicKey, nil
+}
+
+type LocalFile struct {
+	*os.File
+}
+
+func (lf LocalFile) Name() upspin.PathName { return upspin.PathName(lf.File.Name()) }
+
+type LocalClient struct {
+}
+
+func (lc *LocalClient) Get(name upspin.PathName) ([]byte, error) {
+	return ioutil.ReadFile(string(name))
+}
+func (lc *LocalClient) Lookup(name upspin.PathName, followFinal bool) (*upspin.DirEntry, error) {
+	panic("unimplemented")
+}
+func (lc *LocalClient) Put(name upspin.PathName, data []byte) (*upspin.DirEntry, error) {
+	err := ioutil.WriteFile(string(name), data, 0644)
+	return &upspin.DirEntry{SignedName: name, Name: name}, err
+}
+
+func (lc *LocalClient) PutLink(oldName, newName upspin.PathName) (*upspin.DirEntry, error) {
+	panic("unimplemented")
+}
+func (lc *LocalClient) PutDuplicate(oldName, newName upspin.PathName) (*upspin.DirEntry, error) {
+	panic("unimplemented")
+}
+func (lc *LocalClient) MakeDirectory(dirName upspin.PathName) (*upspin.DirEntry, error) {
+	err := os.MkdirAll(string(dirName), 0755)
+	return &upspin.DirEntry{SignedName: dirName, Name: dirName}, err
+}
+func (lc *LocalClient) Rename(oldName, newName upspin.PathName) error {
+	panic("unimplemented")
+}
+func (lc *LocalClient) Delete(name upspin.PathName) error {
+	panic("unimplemented")
+}
+func (lc *LocalClient) Glob(pattern string) ([]*upspin.DirEntry, error) {
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		return nil, err
+	}
+	var dirs []*upspin.DirEntry
+	for _, m := range matches {
+		d := &upspin.DirEntry{
+			SignedName: upspin.PathName(m),
+			Name:       upspin.PathName(m),
+		}
+		dirs = append(dirs, d)
+	}
+	return dirs, nil
+}
+
+func (lc *LocalClient) Create(name upspin.PathName) (upspin.File, error) {
+	f, err := os.Create(string(name))
+	return LocalFile{f}, err
+}
+func (lc *LocalClient) Open(name upspin.PathName) (upspin.File, error) {
+	f, err := os.Open(string(name))
+	return LocalFile{f}, err
+}
+func (lc *LocalClient) DirServer(name upspin.PathName) (upspin.DirServer, error) {
+	panic("unimplemented")
 }
